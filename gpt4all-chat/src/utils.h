@@ -1,8 +1,5 @@
 #pragma once
 
-#include <fmt/base.h>
-#include <fmt/format.h>
-
 #include <QByteArray>
 #include <QJsonValue>
 #include <QLatin1StringView> // IWYU pragma: keep
@@ -14,6 +11,8 @@
 #include <initializer_list>
 #include <string_view>
 #include <utility> // IWYU pragma: keep
+
+import fmt;
 
 // IWYU pragma: no_forward_declare QJsonValue
 class QJsonObject;

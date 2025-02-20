@@ -11,7 +11,6 @@
 #include "toolmodel.h"
 #include "toolcallparser.h"
 
-#include <fmt/format.h>
 #include <minja/minja.hpp>
 #include <nlohmann/json.hpp>
 
@@ -61,6 +60,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
+import fmt;
 
 using namespace Qt::Literals::StringLiterals;
 using namespace ToolEnums;

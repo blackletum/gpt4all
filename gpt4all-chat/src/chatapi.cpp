@@ -2,8 +2,6 @@
 
 #include "utils.h"
 
-#include <fmt/format.h>
-
 #include <QAnyStringView>
 #include <QCoreApplication>
 #include <QDebug>
@@ -29,6 +27,8 @@
 #include <functional>
 #include <iostream>
 #include <utility>
+
+import fmt;
 
 using namespace Qt::Literals::StringLiterals;
 

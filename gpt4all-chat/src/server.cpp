@@ -6,7 +6,6 @@
 #include "mysettings.h"
 #include "utils.h" // IWYU pragma: keep
 
-#include <fmt/format.h>
 #include <gpt4all-backend/llmodel.h>
 
 #include <QByteArray>
@@ -48,6 +47,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+import fmt;
 
 using namespace std::string_literals;
 using namespace Qt::Literals::StringLiterals;

@@ -7,8 +7,6 @@
 #include "utils.h" // IWYU pragma: keep
 #include "xlsxtomd.h"
 
-#include <fmt/format.h>
-
 #include <QAbstractListModel>
 #include <QBuffer>
 #include <QByteArray>
@@ -41,6 +39,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+import fmt;
 
 using namespace Qt::Literals::StringLiterals;
 namespace ranges = std::ranges;
