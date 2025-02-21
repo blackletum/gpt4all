@@ -15,8 +15,13 @@ export module gpt4all.backend.main;
 
 export namespace gpt4all::backend {
 
+struct NetErr {
+    QNetworkReply::NetworkError error;
+    QString                     errorString;
+};
+
 template <typename T>
-using DataOrNetErr = std::expected<T, QNetworkReply::NetworkError>;
+using DataOrNetErr = std::expected<T, NetErr>;
 
 
 class LLMProvider {

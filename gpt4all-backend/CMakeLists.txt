@@ -7,5 +7,5 @@ include(../common/common.cmake)
 find_package(Qt6 6.8 COMPONENTS Concurrent Core Network REQUIRED)
 
 set(FMT_MODULE ON)
-add_subdirectory(../deps "${CMAKE_CURRENT_BINARY_DIR}/common_deps")
+add_subdirectory(../deps common_deps)
 add_subdirectory(src)

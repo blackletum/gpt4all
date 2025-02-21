@@ -9,6 +9,7 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 endif()
 target_sources(${TARGET} PUBLIC
     FILE_SET gpt4all_backend TYPE CXX_MODULES FILES
+    formatters.cppm
     main.cppm
 )
 gpt4all_add_warning_options(${TARGET})

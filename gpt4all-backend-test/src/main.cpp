@@ -1,3 +1,4 @@
+#include <QCoro/QCoroTask>
 #include <QLatin1StringView>
 
 import fmt;
@@ -10,5 +11,10 @@ using gpt4all::backend::LLMProvider;
 int main()
 {
     LLMProvider provider(OLLAMA_URL);
-    fmt::print("Server version: {}", provider.getVersion());
+    auto version = QCoro::waitFor(provider.getVersion());
+    if (version) {
+        fmt::print("Server version: {}", *version);
+    } else {
+        fmt::print("Network error: {}", version.unexpected().errorString);
+    }
 }

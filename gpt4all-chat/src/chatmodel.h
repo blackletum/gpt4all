@@ -4,7 +4,6 @@
 #include "database.h"
 #include "tool.h"
 #include "toolcallparser.h"
-#include "utils.h" // IWYU pragma: keep
 #include "xlsxtomd.h"
 
 #include <QAbstractListModel>
@@ -41,6 +40,7 @@
 #include <vector>
 
 import fmt;
+import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 namespace ranges = std::ranges;

@@ -1,7 +1,6 @@
 #include "database.h"
 
 #include "mysettings.h"
-#include "utils.h" // IWYU pragma: keep
 
 #include <duckx/duckx.hpp>
 #include <usearch/index.hpp>
@@ -42,6 +41,7 @@
 #endif
 
 import fmt;
+import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 namespace ranges = std::ranges;

@@ -29,6 +29,7 @@
 #include <utility>
 
 import fmt;
+import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 

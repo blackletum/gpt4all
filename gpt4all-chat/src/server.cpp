@@ -4,7 +4,6 @@
 #include "chatmodel.h"
 #include "modellist.h"
 #include "mysettings.h"
-#include "utils.h" // IWYU pragma: keep
 
 #include <gpt4all-backend/llmodel.h>
 
@@ -49,6 +48,7 @@
 #include <vector>
 
 import fmt;
+import gpt4all.backend.formatters;
 
 using namespace std::string_literals;
 using namespace Qt::Literals::StringLiterals;
