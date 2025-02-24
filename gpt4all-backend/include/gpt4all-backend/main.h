@@ -1,19 +1,17 @@
-module;
+#pragma once
 
-#include <expected>
+#include <QCoro/QCoroTask>
 
 #include <QNetworkReply>
 #include <QUrl>
 
-#include <QCoro/QCoroTask>
+#include <expected>
 
 class QString;
 template <typename T> class QFuture;
 
-export module gpt4all.backend.main;
 
-
-export namespace gpt4all::backend {
+namespace gpt4all::backend {
 
 struct NetErr {
     QNetworkReply::NetworkError error;

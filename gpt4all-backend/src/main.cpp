@@ -1,4 +1,4 @@
-module;
+#include <gpt4all-backend/main.h>
 
 #include <expected>
 #include <memory>
@@ -13,8 +13,6 @@ module;
 #include <QCoro/QCoroNetworkReply>
 
 using namespace Qt::Literals::StringLiterals;
-
-module gpt4all.backend.main;
 
 
 namespace gpt4all::backend {

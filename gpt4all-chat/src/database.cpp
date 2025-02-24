@@ -3,6 +3,8 @@
 #include "mysettings.h"
 
 #include <duckx/duckx.hpp>
+#include <fmt/format.h>
+#include <gpt4all-backend/formatters.h>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 
@@ -39,9 +41,6 @@
 #   include <fpdf_doc.h>
 #   include <fpdf_text.h>
 #endif
-
-import fmt;
-import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 namespace ranges = std::ranges;

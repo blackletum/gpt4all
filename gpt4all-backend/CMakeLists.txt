@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.28)
 project(gpt4all-backend VERSION 0.1 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)  # make sure fmt module is compiled with the same C++ version as us
+set(CMAKE_CXX_STANDARD 23)  # make sure fmt is compiled with the same C++ version as us
 include(../common/common.cmake)
 
 find_package(Qt6 6.8 COMPONENTS Concurrent Core Network REQUIRED)
 
-set(FMT_MODULE ON)
 add_subdirectory(../deps common_deps)
 add_subdirectory(src)
+
+target_sources(gpt4all-backend PUBLIC
+    FILE_SET public_headers TYPE HEADERS BASE_DIRS include
+    FILES include/gpt4all-backend/main.h
+          include/gpt4all-backend/formatters.h
+)

@@ -6,6 +6,9 @@
 #include "toolcallparser.h"
 #include "xlsxtomd.h"
 
+#include <fmt/format.h>
+#include <gpt4all-backend/formatters.h>
+
 #include <QAbstractListModel>
 #include <QBuffer>
 #include <QByteArray>
@@ -38,9 +41,6 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
-
-import fmt;
-import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 namespace ranges = std::ranges;

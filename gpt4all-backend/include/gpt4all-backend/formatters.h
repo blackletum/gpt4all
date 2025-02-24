@@ -1,4 +1,7 @@
-module;
+#pragma once
+
+#include <fmt/base.h>
+#include <fmt/format.h>
 
 #include <QByteArray>
 #include <QString>
@@ -8,14 +11,11 @@ module;
 
 #include <string_view>
 
-export module gpt4all.backend.formatters;
-import fmt;
-
 
 // fmtlib formatters for QString and QVariant
 
 #define MAKE_FORMATTER(type, conversion)                                         \
-    export template <>                                                           \
+    template <>                                                                  \
     struct fmt::formatter<type, char> : fmt::formatter<std::string_view, char> { \
         template <typename FmtContext>                                           \
         FmtContext::iterator format(const type &value, FmtContext &ctx) const    \

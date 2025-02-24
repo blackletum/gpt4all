@@ -5,6 +5,8 @@
 #include "modellist.h"
 #include "mysettings.h"
 
+#include <fmt/format.h>
+#include <gpt4all-backend/formatters.h>
 #include <gpt4all-backend/llmodel.h>
 
 #include <QByteArray>
@@ -46,9 +48,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-import fmt;
-import gpt4all.backend.formatters;
 
 using namespace std::string_literals;
 using namespace Qt::Literals::StringLiterals;

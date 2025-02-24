@@ -2,6 +2,9 @@
 
 #include "utils.h"
 
+#include <fmt/format.h>
+#include <gpt4all-backend/formatters.h>
+
 #include <QAnyStringView>
 #include <QCoreApplication>
 #include <QDebug>
@@ -27,9 +30,6 @@
 #include <functional>
 #include <iostream>
 #include <utility>
-
-import fmt;
-import gpt4all.backend.formatters;
 
 using namespace Qt::Literals::StringLiterals;
 
