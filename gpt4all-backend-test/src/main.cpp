@@ -8,14 +8,13 @@
 
 #include <QCoreApplication>
 #include <QLatin1StringView>
+#include <QTimer>
 
 using gpt4all::backend::LLMProvider;
 
 
-int main(int argc, char *argv[])
+static void run()
 {
-    QCoreApplication app(argc, argv);
-
     fmt::print("Connecting to server at {}\n", OLLAMA_URL);
     LLMProvider provider(OLLAMA_URL);
     auto version = QCoro::waitFor(provider.getVersion());
@@ -23,6 +22,15 @@ int main(int argc, char *argv[])
         fmt::print("Server version: {}\n", *version);
     } else {
         fmt::print("Network error: {}\n", version.error().errorString);
-        return 1;
+        return QCoreApplication::exit(1);
     }
+    QCoreApplication::exit(0);
+}
+
+
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    QTimer::singleShot(0, &run);
+    return app.exec();
 }
