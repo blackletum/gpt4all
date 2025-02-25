@@ -2,23 +2,47 @@
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 
+#include <QJsonParseError>
 #include <QNetworkReply>
 #include <QString>
 #include <QUrl>
 
+#include <cassert>
 #include <expected>
 #include <utility>
+#include <variant>
 
 
 namespace gpt4all::backend {
 
-struct NetErr {
-    QNetworkReply::NetworkError error;
-    QString                     errorString;
+struct ResponseError {
+private:
+    using ErrorCode = std::variant<
+        QNetworkReply::NetworkError,
+        QJsonParseError::ParseError
+    >;
+
+public:
+    ErrorCode error;
+    QString   errorString;
+
+    ResponseError(const QNetworkReply *reply)
+        : error(reply->error())
+        , errorString(reply->errorString())
+    {
+        assert(reply->error());
+    }
+
+    ResponseError(const QJsonParseError &err)
+        : error(err.error)
+        , errorString(err.errorString())
+    {
+        assert(err.error);
+    }
 };
 
 template <typename T>
-using DataOrNetErr = std::expected<T, NetErr>;
+using DataOrRespErr = std::expected<T, ResponseError>;
 
 
 class LLMProvider {
@@ -31,7 +55,7 @@ public:
     void getBaseUrl(QUrl value) { m_baseUrl = std::move(value); }
 
     /// Retrieve the Ollama version, e.g. "0.5.1"
-    auto getVersion() const -> QCoro::Task<DataOrNetErr<QString>>;
+    auto getVersion() const -> QCoro::Task<DataOrRespErr<QString>>;
 
 private:
     QUrl m_baseUrl;
