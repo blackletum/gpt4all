@@ -1,16 +1,15 @@
 #include <gpt4all-backend/main.h>
 
-#include <expected>
-#include <memory>
+#include <QCoro/QCoroNetworkReply> // IWYU pragma: keep
 
-#include <QFuture>
+#include <QByteArray>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QByteArray>
-#include <QString>
 
-#include <QCoro/QCoroNetworkReply>
+#include <coroutine>
+#include <expected>
+#include <memory>
 
 using namespace Qt::Literals::StringLiterals;
 

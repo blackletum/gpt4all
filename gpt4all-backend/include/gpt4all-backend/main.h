@@ -1,14 +1,13 @@
 #pragma once
 
-#include <QCoro/QCoroTask>
+#include <QCoro/QCoroTask> // IWYU pragma: keep
 
 #include <QNetworkReply>
+#include <QString>
 #include <QUrl>
 
 #include <expected>
-
-class QString;
-template <typename T> class QFuture;
+#include <utility>
 
 
 namespace gpt4all::backend {

@@ -1,14 +1,18 @@
-
 #include "config.h"
 
-#include <QCoro/QCoroTask>
-#include <fmt/format.h>
-#include <gpt4all-backend/formatters.h>
+#include <QCoro/QCoroTask> // IWYU pragma: keep
+#include <fmt/base.h>
+#include <gpt4all-backend/formatters.h> // IWYU pragma: keep
 #include <gpt4all-backend/main.h>
 
 #include <QCoreApplication>
-#include <QLatin1StringView>
 #include <QTimer>
+#include <QString>
+#include <QUrl>
+
+#include <coroutine>
+#include <expected>
+#include <variant>
 
 using gpt4all::backend::LLMProvider;
 
