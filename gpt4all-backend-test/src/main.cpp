@@ -21,13 +21,25 @@ static void run()
 {
     fmt::print("Connecting to server at {}\n", OLLAMA_URL);
     OllamaClient provider(OLLAMA_URL);
-    auto version = QCoro::waitFor(provider.getVersion());
-    if (version) {
-        fmt::print("Server version: {}\n", version->version);
+
+    auto versionResp = QCoro::waitFor(provider.getVersion());
+    if (versionResp) {
+        fmt::print("Server version: {}\n", versionResp->version);
     } else {
-        fmt::print("Error retrieving version: {}\n", version.error().errorString);
+        fmt::print("Error retrieving version: {}\n", versionResp.error().errorString);
         return QCoreApplication::exit(1);
     }
+
+    auto modelsResponse = QCoro::waitFor(provider.listModels());
+    if (modelsResponse) {
+        fmt::print("Available models:\n");
+        for (const auto & model : modelsResponse->models)
+            fmt::print("{}\n", model.model);
+    } else {
+        fmt::print("Error retrieving version: {}\n", modelsResponse.error().errorString);
+        return QCoreApplication::exit(1);
+    }
+
     QCoreApplication::exit(0);
 }
 

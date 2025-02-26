@@ -1,7 +1,8 @@
 #pragma once
 
+#include "ollama_responses.h"
+
 #include <QCoro/QCoroTask> // IWYU pragma: keep
-#include <boost/describe/class.hpp>
 
 #include <QJsonParseError>
 #include <QNetworkReply>
@@ -12,6 +13,8 @@
 #include <expected>
 #include <utility>
 #include <variant>
+
+namespace boost::json { class value; }
 
 
 namespace gpt4all::backend {
@@ -45,9 +48,6 @@ public:
 template <typename T>
 using DataOrRespErr = std::expected<T, ResponseError>;
 
-struct VersionResponse { QString version; };
-BOOST_DESCRIBE_STRUCT(VersionResponse, (), (version))
-
 class OllamaClient {
 public:
     OllamaClient(QUrl baseUrl)
@@ -57,12 +57,26 @@ public:
     const QUrl &baseUrl() const { return m_baseUrl; }
     void getBaseUrl(QUrl value) { m_baseUrl = std::move(value); }
 
-    /// Retrieve the Ollama version, e.g. "0.5.1"
-    auto getVersion() -> QCoro::Task<DataOrRespErr<VersionResponse>>;
+    /// Returns the version of the Ollama server.
+    auto getVersion() -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>
+    { return getSimple<ollama::VersionResponse>(QStringLiteral("version")); }
+
+    /// List models that are available locally.
+    auto listModels() -> QCoro::Task<DataOrRespErr<ollama::ModelsResponse>>
+    { return getSimple<ollama::ModelsResponse>(QStringLiteral("tags")); }
+
+private:
+    template <typename T>
+    auto getSimple(const QString &endpoint) -> QCoro::Task<DataOrRespErr<T>>;
+
+    auto getSimpleGeneric(const QString &endpoint) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
 
 private:
     QUrl                  m_baseUrl;
     QNetworkAccessManager m_nam;
 };
+
+extern template auto OllamaClient::getSimple(const QString &) -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>;
+extern template auto OllamaClient::getSimple(const QString &) -> QCoro::Task<DataOrRespErr<ollama::ModelsResponse>>;
 
 } // namespace gpt4all::backend
