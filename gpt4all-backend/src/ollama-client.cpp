@@ -1,6 +1,6 @@
-#include "ollama_client.h"
+#include "ollama-client.h"
 
-#include "json_helpers.h"
+#include "json-helpers.h"
 
 #include <QCoro/QCoroIODevice> // IWYU pragma: keep
 #include <QCoro/QCoroNetworkReply> // IWYU pragma: keep

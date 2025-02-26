@@ -3,7 +3,7 @@
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 #include <fmt/base.h>
 #include <gpt4all-backend/formatters.h> // IWYU pragma: keep
-#include <gpt4all-backend/ollama_client.h>
+#include <gpt4all-backend/ollama-client.h>
 
 #include <QCoreApplication>
 #include <QTimer>

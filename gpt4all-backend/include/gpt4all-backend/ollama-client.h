@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ollama_responses.h"
+#include "ollama-responses.h"
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 
