@@ -23,9 +23,9 @@ static void run()
     LLMProvider provider(OLLAMA_URL);
     auto version = QCoro::waitFor(provider.getVersion());
     if (version) {
-        fmt::print("Server version: {}\n", *version);
+        fmt::print("Server version: {}\n", version->version);
     } else {
-        fmt::print("Network error: {}\n", version.error().errorString);
+        fmt::print("Error retrieving version: {}\n", version.error().errorString);
         return QCoreApplication::exit(1);
     }
     QCoreApplication::exit(0);

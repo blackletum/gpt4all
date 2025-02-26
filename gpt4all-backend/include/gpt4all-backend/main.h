@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
+#include <boost/describe/class.hpp>
 
 #include <QJsonParseError>
 #include <QNetworkReply>
@@ -19,7 +20,7 @@ struct ResponseError {
 private:
     using ErrorCode = std::variant<
         QNetworkReply::NetworkError,
-        QJsonParseError::ParseError
+        std::exception_ptr
     >;
 
 public:
@@ -33,17 +34,19 @@ public:
         assert(reply->error());
     }
 
-    ResponseError(const QJsonParseError &err)
-        : error(err.error)
-        , errorString(err.errorString())
+    ResponseError(const std::exception &e, std::exception_ptr err)
+        : error(std::move(err))
+        , errorString(e.what())
     {
-        assert(err.error);
+        assert(std::get<std::exception_ptr>(error));
     }
 };
 
 template <typename T>
 using DataOrRespErr = std::expected<T, ResponseError>;
 
+struct VersionResponse { QString version; };
+BOOST_DESCRIBE_STRUCT(VersionResponse, (), (version))
 
 class LLMProvider {
 public:
@@ -55,10 +58,11 @@ public:
     void getBaseUrl(QUrl value) { m_baseUrl = std::move(value); }
 
     /// Retrieve the Ollama version, e.g. "0.5.1"
-    auto getVersion() const -> QCoro::Task<DataOrRespErr<QString>>;
+    auto getVersion() -> QCoro::Task<DataOrRespErr<VersionResponse>>;
 
 private:
-    QUrl m_baseUrl;
+    QUrl                  m_baseUrl;
+    QNetworkAccessManager m_nam;
 };
 
 } // namespace gpt4all::backend
