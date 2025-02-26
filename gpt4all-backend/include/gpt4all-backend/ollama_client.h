@@ -48,9 +48,9 @@ using DataOrRespErr = std::expected<T, ResponseError>;
 struct VersionResponse { QString version; };
 BOOST_DESCRIBE_STRUCT(VersionResponse, (), (version))
 
-class LLMProvider {
+class OllamaClient {
 public:
-    LLMProvider(QUrl baseUrl)
+    OllamaClient(QUrl baseUrl)
         : m_baseUrl(baseUrl)
         {}
 

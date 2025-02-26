@@ -1,4 +1,4 @@
-#include "main.h"
+#include "ollama_client.h"
 
 #include "json_helpers.h"
 
@@ -20,7 +20,7 @@ namespace json = boost::json;
 
 namespace gpt4all::backend {
 
-auto LLMProvider::getVersion() -> QCoro::Task<DataOrRespErr<VersionResponse>>
+auto OllamaClient::getVersion() -> QCoro::Task<DataOrRespErr<VersionResponse>>
 {
     std::unique_ptr<QNetworkReply> reply(m_nam.get(QNetworkRequest(m_baseUrl.resolved(u"/api/version"_s))));
     if (reply->error())

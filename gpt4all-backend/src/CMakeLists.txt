@@ -2,7 +2,7 @@ set(TARGET gpt4all-backend)
 
 add_library(${TARGET} STATIC
     json_helpers.cpp
-    main.cpp
+    ollama_client.cpp
 )
 target_compile_features(${TARGET} PUBLIC cxx_std_23)
 gpt4all_add_warning_options(${TARGET})

@@ -3,7 +3,7 @@
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 #include <fmt/base.h>
 #include <gpt4all-backend/formatters.h> // IWYU pragma: keep
-#include <gpt4all-backend/main.h>
+#include <gpt4all-backend/ollama_client.h>
 
 #include <QCoreApplication>
 #include <QTimer>
@@ -14,13 +14,13 @@
 #include <expected>
 #include <variant>
 
-using gpt4all::backend::LLMProvider;
+using gpt4all::backend::OllamaClient;
 
 
 static void run()
 {
     fmt::print("Connecting to server at {}\n", OLLAMA_URL);
-    LLMProvider provider(OLLAMA_URL);
+    OllamaClient provider(OLLAMA_URL);
     auto version = QCoro::waitFor(provider.getVersion());
     if (version) {
         fmt::print("Server version: {}\n", version->version);
