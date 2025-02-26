@@ -36,7 +36,7 @@ template auto OllamaClient::getSimple(const QString &) -> QCoro::Task<DataOrResp
 auto OllamaClient::getSimpleGeneric(const QString &endpoint) -> QCoro::Task<DataOrRespErr<json::value>>
 {
     std::unique_ptr<QNetworkReply> reply(m_nam.get(
-        QNetworkRequest(m_baseUrl.resolved(u"/api/%1"_s.arg(endpoint)))
+        QNetworkRequest(m_baseUrl.resolved(QUrl(endpoint)))
     ));
     if (reply->error())
         co_return std::unexpected(reply.get());
