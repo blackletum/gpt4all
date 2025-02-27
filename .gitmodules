@@ -25,4 +25,4 @@
 	url = https://github.com/nlohmann/json.git
 [submodule "gpt4all-backend/deps/qcoro"]
 	path = deps/qcoro
-	url = https://github.com/qcoro/qcoro.git
+	url = https://github.com/nomic-ai/qcoro.git
