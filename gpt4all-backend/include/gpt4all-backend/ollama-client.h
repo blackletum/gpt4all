@@ -10,7 +10,6 @@
 #include <QUrl>
 
 #include <cassert>
-#include <exception>
 #include <expected>
 #include <utility>
 #include <variant>
@@ -22,28 +21,14 @@ namespace boost::json { class value; }
 namespace gpt4all::backend {
 
 struct ResponseError {
-private:
-    using ErrorCode = std::variant<
-        QNetworkReply::NetworkError,
-        std::exception_ptr
-    >;
-
-public:
-    ErrorCode error;
-    QString   errorString;
+    QNetworkReply::NetworkError error;
+    QString                     errorString;
 
     ResponseError(const QNetworkReply *reply)
         : error(reply->error())
         , errorString(reply->errorString())
     {
         assert(reply->error());
-    }
-
-    ResponseError(const std::exception &e, std::exception_ptr err)
-        : error(std::move(err))
-        , errorString(e.what())
-    {
-        assert(std::get<std::exception_ptr>(error));
     }
 };
 
