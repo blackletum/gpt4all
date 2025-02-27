@@ -4,12 +4,13 @@
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 
-#include <QJsonParseError>
+#include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QString>
 #include <QUrl>
 
 #include <cassert>
+#include <exception>
 #include <expected>
 #include <utility>
 #include <variant>

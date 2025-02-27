@@ -1,14 +1,13 @@
 #include "ollama-client.h"
 
-#include "json-helpers.h"
+#include "json-helpers.h" // IWYU pragma: keep
 #include "qt-json-stream.h"
 
 #include <QCoro/QCoroIODevice> // IWYU pragma: keep
 #include <QCoro/QCoroNetworkReply> // IWYU pragma: keep
-#include <boost/json.hpp>
+#include <boost/json.hpp> // IWYU pragma: keep
 
 #include <QByteArray>
-#include <QNetworkAccessManager>
 #include <QNetworkRequest>
 
 #include <coroutine>

@@ -1,10 +1,11 @@
 #pragma once
 
-#include <boost/json.hpp>
+#include <boost/json.hpp> // IWYU pragma: keep
 
 #include <QIODevice>
-#include <QObject>
 #include <QtTypes>
+
+class QObject;
 
 
 namespace gpt4all::backend {

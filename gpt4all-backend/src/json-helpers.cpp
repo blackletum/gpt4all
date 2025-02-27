@@ -1,7 +1,8 @@
 #include "json-helpers.h"
 
-#include <boost/json.hpp>
+#include <boost/json.hpp> // IWYU pragma: keep
 
+#include <QByteArray>
 #include <QString>
 
 namespace json = boost::json;

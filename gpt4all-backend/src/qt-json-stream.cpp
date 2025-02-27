@@ -1,5 +1,9 @@
 #include "qt-json-stream.h"
 
+#include <QtPreprocessorSupport>
+
+#include <cstddef>
+
 
 namespace json = boost::json;
 

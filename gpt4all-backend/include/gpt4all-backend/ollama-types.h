@@ -4,11 +4,12 @@
 #   include <boost/describe/class.hpp>
 #   include <boost/describe/enum.hpp>
 #endif
-#include <boost/json.hpp>
+#include <boost/json.hpp> // IWYU pragma: keep
 
 #include <QString>
 #include <QtTypes>
 
+#include <optional>
 #include <vector>
 
 
