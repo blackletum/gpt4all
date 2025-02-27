@@ -10,6 +10,7 @@ namespace json = boost::json;
 
 namespace gpt4all::backend {
 
+
 JsonStreamDevice::JsonStreamDevice(const json::value *jv, QObject *parent)
     : QIODevice(parent)
 {
@@ -30,5 +31,6 @@ qint64 JsonStreamDevice::writeData(const char *data, qint64 maxSize)
     Q_UNUSED(maxSize)
     return -1;
 }
+
 
 } // namespace gpt4all::backend

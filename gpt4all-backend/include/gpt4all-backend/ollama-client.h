@@ -3,6 +3,8 @@
 #include "ollama-types.h"
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
+#include <boost/json.hpp> // IWYU pragma: keep
+#include <boost/system.hpp>
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -15,20 +17,33 @@
 #include <variant>
 
 class QNetworkRequest;
-namespace boost::json { class value; }
 
 
 namespace gpt4all::backend {
 
 struct ResponseError {
-    QNetworkReply::NetworkError error;
-    QString                     errorString;
+private:
+    using ErrorCode = std::variant<
+        QNetworkReply::NetworkError,
+        boost::system::error_code
+    >;
+
+public:
+    ErrorCode error;
+    QString   errorString;
 
     ResponseError(const QNetworkReply *reply)
         : error(reply->error())
         , errorString(reply->errorString())
     {
         assert(reply->error());
+    }
+
+    ResponseError(const boost::system::system_error &e)
+        : error(e.code())
+        , errorString(QString::fromUtf8(e.what()))
+    {
+        assert(e.code());
     }
 };
 
@@ -45,40 +60,44 @@ public:
     const QUrl &baseUrl() const { return m_baseUrl; }
     void getBaseUrl(QUrl value) { m_baseUrl = std::move(value); }
 
-    /// Returns the version of the Ollama server.
-    auto getVersion() -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>
+    /// Returns the Ollama server version as a string.
+    auto version() -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>
     { return get<ollama::VersionResponse>(QStringLiteral("version")); }
 
-    /// List models that are available locally.
-    auto listModels() -> QCoro::Task<DataOrRespErr<ollama::ModelsResponse>>
-    { return get<ollama::ModelsResponse>(QStringLiteral("tags")); }
+    /// Lists models that are available locally.
+    auto list() -> QCoro::Task<DataOrRespErr<ollama::ListResponse>>
+    { return get<ollama::ListResponse>(QStringLiteral("tags")); }
 
-    /// Show details about a model including modelfile, template, parameters, license, and system prompt.
-    auto showModelInfo(const ollama::ModelInfoRequest &req) -> QCoro::Task<DataOrRespErr<ollama::ModelInfo>>
-    { return post<ollama::ModelInfo>(QStringLiteral("show"), req); }
+    /// Obtains model information, including details, modelfile, license etc.
+    auto show(const ollama::ShowRequest &req) -> QCoro::Task<DataOrRespErr<ollama::ShowResponse>>
+    { return post<ollama::ShowResponse>(QStringLiteral("show"), req); }
 
 private:
     QNetworkRequest makeRequest(const QString &path) const;
 
+    auto processResponse(QNetworkReply &reply) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
+
     template <typename Resp>
     auto get(const QString &path) -> QCoro::Task<DataOrRespErr<Resp>>;
     template <typename Resp, typename Req>
-    auto post(const QString &path, Req const &req) -> QCoro::Task<DataOrRespErr<Resp>>;
+    auto post(const QString &path, Req const &body) -> QCoro::Task<DataOrRespErr<Resp>>;
 
     auto getJson(const QString &path) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
-    auto postJson(const QString &path, const boost::json::value &req)
+    auto postJson(const QString &path, const boost::json::value &body)
         -> QCoro::Task<DataOrRespErr<boost::json::value>>;
 
 private:
-    QUrl                  m_baseUrl;
-    QString               m_userAgent;
-    QNetworkAccessManager m_nam;
+    QUrl                       m_baseUrl;
+    QString                    m_userAgent;
+    QNetworkAccessManager      m_nam;
+    boost::json::stream_parser m_parser;
 };
 
 extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>;
-extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::ModelsResponse>>;
+extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::ListResponse>>;
 
-extern template auto OllamaClient::post(const QString &, const ollama::ModelInfoRequest &)
-    -> QCoro::Task<DataOrRespErr<ollama::ModelInfo>>;
+extern template auto OllamaClient::post(const QString &, const ollama::ShowRequest &)
+    -> QCoro::Task<DataOrRespErr<ollama::ShowResponse>>;
+
 
 } // namespace gpt4all::backend

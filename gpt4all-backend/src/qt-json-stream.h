@@ -10,6 +10,7 @@ class QObject;
 
 namespace gpt4all::backend {
 
+
 class JsonStreamDevice : public QIODevice
 {
 public:
@@ -24,5 +25,6 @@ protected:
 private:
     boost::json::serializer m_sr;
 };
+
 
 } // namespace gpt4all::backend

@@ -7,7 +7,6 @@ add_library(${TARGET} STATIC
     qt-json-stream.cpp
 )
 target_compile_features(${TARGET} PUBLIC cxx_std_23)
-target_compile_definitions(${TARGET} PRIVATE G4A_BACKEND_IMPL)
 gpt4all_add_warning_options(${TARGET})
 target_include_directories(${TARGET} PRIVATE
     .
