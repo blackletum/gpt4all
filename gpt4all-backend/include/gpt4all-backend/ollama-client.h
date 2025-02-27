@@ -92,4 +92,7 @@ private:
 extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>;
 extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::ModelsResponse>>;
 
+extern template auto OllamaClient::post(const QString &, const ollama::ModelInfoRequest &)
+    -> QCoro::Task<DataOrRespErr<ollama::ModelInfo>>;
+
 } // namespace gpt4all::backend

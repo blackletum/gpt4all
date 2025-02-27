@@ -36,7 +36,15 @@ static void run()
         for (const auto & model : modelsResponse->models)
             fmt::print("{}\n", model.model);
     } else {
-        fmt::print("Error retrieving version: {}\n", modelsResponse.error().errorString);
+        fmt::print("Error retrieving available models: {}\n", modelsResponse.error().errorString);
+        return QCoreApplication::exit(1);
+    }
+
+    auto showResponse = QCoro::waitFor(provider.showModelInfo({ .model = "DeepSeek-R1-Distill-Llama-70B-Q4_K_S" }));
+    if (showResponse) {
+        fmt::print("Model family: {}\n", showResponse->details.family);
+    } else {
+        fmt::print("Error retrieving model info: {}\n", showResponse.error().errorString);
         return QCoreApplication::exit(1);
     }
 

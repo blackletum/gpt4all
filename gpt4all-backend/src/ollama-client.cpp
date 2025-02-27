@@ -74,6 +74,8 @@ auto OllamaClient::post(const QString &path, const Req &req) -> QCoro::Task<Data
     co_return std::unexpected(value.error());
 }
 
+template auto OllamaClient::post(const QString &, const ModelInfoRequest &) -> QCoro::Task<DataOrRespErr<ModelInfo>>;
+
 auto OllamaClient::getJson(const QString &path) -> QCoro::Task<DataOrRespErr<json::value>>
 {
     std::unique_ptr<QNetworkReply> reply(m_nam.get(makeRequest(path)));

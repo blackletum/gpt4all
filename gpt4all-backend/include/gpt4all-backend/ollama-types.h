@@ -14,6 +14,10 @@
 
 namespace gpt4all::backend::ollama {
 
+//
+// basic types
+//
+
 /// Details about a model.
 struct ModelDetails {
     QString              parent_model;       /// The parent of the model.
@@ -37,15 +41,6 @@ struct Model {
 };
 #ifdef G4A_BACKEND_IMPL
 BOOST_DESCRIBE_STRUCT(Model, (), (model, modified_at, size, digest, details))
-#endif
-
-
-/// Request class for the show model info endpoint.
-struct ModelInfoRequest {
-    QString model; /// The model name.
-};
-#ifdef G4A_BACKEND_IMPL
-BOOST_DESCRIBE_STRUCT(ModelInfoRequest, (), (model))
 #endif
 
 enum MessageRole {
@@ -84,6 +79,21 @@ struct Message {
 BOOST_DESCRIBE_STRUCT(Message, (), (role, content, images, tool_calls))
 #endif
 
+//
+// request types
+//
+
+/// Request class for the show model info endpoint.
+struct ModelInfoRequest {
+    QString model; /// The model name.
+};
+#ifdef G4A_BACKEND_IMPL
+BOOST_DESCRIBE_STRUCT(ModelInfoRequest, (), (model))
+#endif
+
+//
+// response types
+//
 
 /// The response class for the version endpoint.
 struct VersionResponse {
