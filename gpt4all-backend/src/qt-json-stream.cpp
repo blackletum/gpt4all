@@ -19,7 +19,7 @@ JsonStreamDevice::JsonStreamDevice(const json::value *jv, QObject *parent)
 
 qint64 JsonStreamDevice::readData(char *data, qint64 maxSize)
 {
-    if (m_sr.done()) return 0;
+    if (m_sr.done()) return -1; // EOF
     auto chunk = m_sr.read(data, size_t(maxSize));
     return qint64(chunk.size());
 }
