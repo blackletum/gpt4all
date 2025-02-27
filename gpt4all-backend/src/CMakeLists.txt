@@ -3,8 +3,11 @@ set(TARGET gpt4all-backend)
 add_library(${TARGET} STATIC
     json-helpers.cpp
     ollama-client.cpp
+    ollama-types.cpp
+    qt-json-stream.cpp
 )
 target_compile_features(${TARGET} PUBLIC cxx_std_23)
+target_compile_definitions(${TARGET} PRIVATE G4A_BACKEND_IMPL)
 gpt4all_add_warning_options(${TARGET})
 target_include_directories(${TARGET} PRIVATE
     .
@@ -23,5 +26,5 @@ target_link_libraries(${TARGET} PRIVATE
 
 # link Boost::json as -isystem to suppress -Wundef
 get_target_property(LIB_INCLUDE_DIRS Boost::json INTERFACE_INCLUDE_DIRECTORIES)
-target_include_directories(${TARGET} SYSTEM PRIVATE ${LIB_INCLUDE_DIRS})
-target_link_libraries(${TARGET} PRIVATE Boost::json)
+target_include_directories(${TARGET} SYSTEM PUBLIC ${LIB_INCLUDE_DIRS})
+target_link_libraries(${TARGET} PUBLIC Boost::json)

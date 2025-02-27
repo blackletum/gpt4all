@@ -14,5 +14,5 @@ target_sources(gpt4all-backend PUBLIC
     FILE_SET public_headers TYPE HEADERS BASE_DIRS include FILES
         include/gpt4all-backend/formatters.h
         include/gpt4all-backend/ollama-client.h
-        include/gpt4all-backend/ollama-responses.h
+        include/gpt4all-backend/ollama-types.h
 )
