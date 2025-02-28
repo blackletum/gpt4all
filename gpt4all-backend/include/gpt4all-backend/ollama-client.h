@@ -4,7 +4,7 @@
 
 #include <QCoro/QCoroTask> // IWYU pragma: keep
 #include <boost/json.hpp> // IWYU pragma: keep
-#include <boost/system.hpp>
+#include <boost/system.hpp> // IWYU pragma: keep
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -17,27 +17,27 @@
 #include <variant>
 
 class QNetworkRequest;
+class QRestReply;
 
 
 namespace gpt4all::backend {
 
 struct ResponseError {
+public:
+    struct BadStatus { int code; };
+
 private:
     using ErrorCode = std::variant<
         QNetworkReply::NetworkError,
-        boost::system::error_code
+        boost::system::error_code,
+        BadStatus
     >;
 
 public:
     ErrorCode error;
     QString   errorString;
 
-    ResponseError(const QNetworkReply *reply)
-        : error(reply->error())
-        , errorString(reply->errorString())
-    {
-        assert(reply->error());
-    }
+    ResponseError(const QRestReply *reply);
 
     ResponseError(const boost::system::system_error &e)
         : error(e.code())

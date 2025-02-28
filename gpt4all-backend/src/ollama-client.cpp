@@ -8,6 +8,9 @@
 
 #include <QByteArray>
 #include <QNetworkRequest>
+#include <QRestReply>
+#include <QVariant>
+#include <QtAssert>
 
 #include <coroutine>
 #include <expected>
@@ -21,6 +24,26 @@ namespace json = boost::json;
 namespace gpt4all::backend {
 
 
+ResponseError::ResponseError(const QRestReply *reply)
+{
+    auto *nr = reply->networkReply();
+    if (reply->hasError()) {
+        error       = nr->error();
+        errorString = nr->errorString();
+    } else if (!reply->isHttpStatusSuccess()) {
+        auto code   = reply->httpStatus();
+        auto reason = nr->attribute(QNetworkRequest::HttpReasonPhraseAttribute);
+        error       = BadStatus(code);
+        errorString = u"HTTP %1%2%3 for URL \"%4\""_s.arg(
+            QString::number(code),
+            reason.isValid() ? u" "_s : QString(),
+            reason.toString(),
+            nr->request().url().toString()
+        );
+    } else
+        Q_UNREACHABLE();
+}
+
 QNetworkRequest OllamaClient::makeRequest(const QString &path) const
 {
     QNetworkRequest req(m_baseUrl.resolved(QUrl(path)));
@@ -30,16 +53,21 @@ QNetworkRequest OllamaClient::makeRequest(const QString &path) const
 
 auto OllamaClient::processResponse(QNetworkReply &reply) -> QCoro::Task<DataOrRespErr<json::value>>
 {
+    QRestReply restReply(&reply);
     if (reply.error())
-        co_return std::unexpected(&reply);
+        co_return std::unexpected(&restReply);
 
     auto coroReply = qCoro(reply);
-    do {
+    for (;;) {
         auto chunk = co_await coroReply.readAll();
-        if (reply.error())
-            co_return std::unexpected(&reply);
+        if (!restReply.isSuccess())
+            co_return std::unexpected(&restReply);
+        if (chunk.isEmpty()) {
+            Q_ASSERT(reply.atEnd());
+            break;
+        }
         m_parser.write(chunk.data(), chunk.size());
-    } while (!reply.atEnd());
+    }
 
     m_parser.finish();
     co_return m_parser.release();
