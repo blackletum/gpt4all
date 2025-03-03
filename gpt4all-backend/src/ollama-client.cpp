@@ -2,6 +2,7 @@
 
 #include "json-helpers.h" // IWYU pragma: keep
 #include "qt-json-stream.h"
+#include "rest.h"
 
 #include <QCoro/QCoroIODevice> // IWYU pragma: keep
 #include <QCoro/QCoroNetworkReply> // IWYU pragma: keep
@@ -26,22 +27,14 @@ namespace gpt4all::backend {
 
 ResponseError::ResponseError(const QRestReply *reply)
 {
-    auto *nr = reply->networkReply();
     if (reply->hasError()) {
-        error       = nr->error();
-        errorString = nr->errorString();
+        error = reply->networkReply()->error();
     } else if (!reply->isHttpStatusSuccess()) {
-        auto code   = reply->httpStatus();
-        auto reason = nr->attribute(QNetworkRequest::HttpReasonPhraseAttribute);
-        error       = BadStatus(code);
-        errorString = u"HTTP %1%2%3 for URL \"%4\""_s.arg(
-            QString::number(code),
-            reason.isValid() ? u" "_s : QString(),
-            reason.toString(),
-            nr->request().url().toString()
-        );
+        error = BadStatus(reply->httpStatus());
     } else
         Q_UNREACHABLE();
+
+    errorString = restErrorString(*reply);
 }
 
 QNetworkRequest OllamaClient::makeRequest(const QString &path) const

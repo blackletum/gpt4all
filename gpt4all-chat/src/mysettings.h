@@ -62,7 +62,6 @@ class MySettings : public QObject
     Q_PROPERTY(ChatTheme chatTheme READ chatTheme WRITE setChatTheme NOTIFY chatThemeChanged)
     Q_PROPERTY(FontSize fontSize READ fontSize WRITE setFontSize NOTIFY fontSizeChanged)
     Q_PROPERTY(QString languageAndLocale READ languageAndLocale WRITE setLanguageAndLocale NOTIFY languageAndLocaleChanged)
-    Q_PROPERTY(bool forceMetal READ forceMetal WRITE setForceMetal NOTIFY forceMetalChanged)
     Q_PROPERTY(QString lastVersionStarted READ lastVersionStarted WRITE setLastVersionStarted NOTIFY lastVersionStartedChanged)
     Q_PROPERTY(int localDocsChunkSize READ localDocsChunkSize WRITE setLocalDocsChunkSize NOTIFY localDocsChunkSizeChanged)
     Q_PROPERTY(int localDocsRetrievalSize READ localDocsRetrievalSize WRITE setLocalDocsRetrievalSize NOTIFY localDocsRetrievalSizeChanged)
@@ -70,13 +69,11 @@ class MySettings : public QObject
     Q_PROPERTY(QStringList localDocsFileExtensions READ localDocsFileExtensions WRITE setLocalDocsFileExtensions NOTIFY localDocsFileExtensionsChanged)
     Q_PROPERTY(bool localDocsUseRemoteEmbed READ localDocsUseRemoteEmbed WRITE setLocalDocsUseRemoteEmbed NOTIFY localDocsUseRemoteEmbedChanged)
     Q_PROPERTY(QString localDocsNomicAPIKey READ localDocsNomicAPIKey WRITE setLocalDocsNomicAPIKey NOTIFY localDocsNomicAPIKeyChanged)
-    Q_PROPERTY(QString localDocsEmbedDevice READ localDocsEmbedDevice WRITE setLocalDocsEmbedDevice NOTIFY localDocsEmbedDeviceChanged)
     Q_PROPERTY(QString networkAttribution READ networkAttribution WRITE setNetworkAttribution NOTIFY networkAttributionChanged)
     Q_PROPERTY(bool networkIsActive READ networkIsActive WRITE setNetworkIsActive NOTIFY networkIsActiveChanged)
     Q_PROPERTY(bool networkUsageStatsActive READ networkUsageStatsActive WRITE setNetworkUsageStatsActive NOTIFY networkUsageStatsActiveChanged)
     Q_PROPERTY(QString device READ device WRITE setDevice NOTIFY deviceChanged)
     Q_PROPERTY(QStringList deviceList MEMBER m_deviceList CONSTANT)
-    Q_PROPERTY(QStringList embeddingsDeviceList MEMBER m_embeddingsDeviceList CONSTANT)
     Q_PROPERTY(int networkPort READ networkPort WRITE setNetworkPort NOTIFY networkPortChanged)
     Q_PROPERTY(SuggestionMode suggestionMode READ suggestionMode WRITE setSuggestionMode NOTIFY suggestionModeChanged)
     Q_PROPERTY(QStringList uiLanguages MEMBER m_uiLanguages CONSTANT)
@@ -90,6 +87,8 @@ public Q_SLOTS:
 
 public:
     static MySettings *globalInstance();
+
+    static const QString &userAgent();
 
     Q_INVOKABLE static QVariant checkJinjaTemplateError(const QString &tmpl);
 
@@ -172,8 +171,6 @@ public:
     void setChatTheme(ChatTheme value);
     FontSize fontSize() const;
     void setFontSize(FontSize value);
-    bool forceMetal() const;
-    void setForceMetal(bool value);
     QString device();
     void setDevice(const QString &value);
     int32_t contextLength() const;
@@ -203,8 +200,6 @@ public:
     void setLocalDocsUseRemoteEmbed(bool value);
     QString localDocsNomicAPIKey() const;
     void setLocalDocsNomicAPIKey(const QString &value);
-    QString localDocsEmbedDevice() const;
-    void setLocalDocsEmbedDevice(const QString &value);
 
     // Network settings
     QString networkAttribution() const;
@@ -243,7 +238,6 @@ Q_SIGNALS:
     void userDefaultModelChanged();
     void chatThemeChanged();
     void fontSizeChanged();
-    void forceMetalChanged(bool);
     void lastVersionStartedChanged();
     void localDocsChunkSizeChanged();
     void localDocsRetrievalSizeChanged();
@@ -251,7 +245,6 @@ Q_SIGNALS:
     void localDocsFileExtensionsChanged();
     void localDocsUseRemoteEmbedChanged();
     void localDocsNomicAPIKeyChanged();
-    void localDocsEmbedDeviceChanged();
     void networkAttributionChanged();
     void networkIsActiveChanged();
     void networkPortChanged();
@@ -287,9 +280,7 @@ private:
 
 private:
     QSettings m_settings;
-    bool m_forceMetal;
     const QStringList m_deviceList;
-    const QStringList m_embeddingsDeviceList;
     const QStringList m_uiLanguages;
     std::unique_ptr<QTranslator> m_translator;
 

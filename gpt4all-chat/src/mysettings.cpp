@@ -1,6 +1,7 @@
 #include "mysettings.h"
 
 #include "chatllm.h"
+#include "config.h"
 #include "modellist.h"
 
 #include <gpt4all-backend/llmodel.h>
@@ -48,7 +49,6 @@ namespace ModelSettingsKey { namespace {
 namespace defaults {
 
 static const int     threadCount             = std::min(4, (int32_t) std::thread::hardware_concurrency());
-static const bool    forceMetal              = false;
 static const bool    networkIsActive         = false;
 static const bool    networkUsageStatsActive = false;
 static const QString device                  = "Auto";
@@ -71,7 +71,6 @@ static const QVariantMap basicDefaults {
     { "localdocs/fileExtensions", QStringList { "docx", "pdf", "txt", "md", "rst" } },
     { "localdocs/useRemoteEmbed", false },
     { "localdocs/nomicAPIKey",    "" },
-    { "localdocs/embedDevice",    "Auto" },
     { "network/attribution",      "" },
 };
 
@@ -174,9 +173,14 @@ MySettings *MySettings::globalInstance()
 MySettings::MySettings()
     : QObject(nullptr)
     , m_deviceList(getDevices())
-    , m_embeddingsDeviceList(getDevices(/*skipKompute*/ true))
     , m_uiLanguages(getUiLanguages(modelPath()))
 {
+}
+
+const QString &MySettings::userAgent()
+{
+    static const QString s_userAgent = QStringLiteral("gpt4all/" APP_VERSION);
+    return s_userAgent;
 }
 
 QVariant MySettings::checkJinjaTemplateError(const QString &tmpl)
@@ -256,7 +260,6 @@ void MySettings::restoreApplicationDefaults()
     setNetworkPort(basicDefaults.value("networkPort").toInt());
     setModelPath(defaultLocalModelsPath());
     setUserDefaultModel(basicDefaults.value("userDefaultModel").toString());
-    setForceMetal(defaults::forceMetal);
     setSuggestionMode(basicDefaults.value("suggestionMode").value<SuggestionMode>());
     setLanguageAndLocale(defaults::languageAndLocale);
 }
@@ -269,7 +272,6 @@ void MySettings::restoreLocalDocsDefaults()
     setLocalDocsFileExtensions(basicDefaults.value("localdocs/fileExtensions").toStringList());
     setLocalDocsUseRemoteEmbed(basicDefaults.value("localdocs/useRemoteEmbed").toBool());
     setLocalDocsNomicAPIKey(basicDefaults.value("localdocs/nomicAPIKey").toString());
-    setLocalDocsEmbedDevice(basicDefaults.value("localdocs/embedDevice").toString());
 }
 
 void MySettings::eraseModel(const ModelInfo &info)
@@ -628,7 +630,6 @@ bool        MySettings::localDocsShowReferences() const { return getBasicSetting
 QStringList MySettings::localDocsFileExtensions() const { return getBasicSetting("localdocs/fileExtensions").toStringList(); }
 bool        MySettings::localDocsUseRemoteEmbed() const { return getBasicSetting("localdocs/useRemoteEmbed").toBool(); }
 QString     MySettings::localDocsNomicAPIKey() const    { return getBasicSetting("localdocs/nomicAPIKey"   ).toString(); }
-QString     MySettings::localDocsEmbedDevice() const    { return getBasicSetting("localdocs/embedDevice"   ).toString(); }
 QString     MySettings::networkAttribution() const      { return getBasicSetting("network/attribution"     ).toString(); }
 
 ChatTheme      MySettings::chatTheme() const      { return ChatTheme     (getEnumSetting("chatTheme", chatThemeNames)); }
@@ -646,7 +647,6 @@ void MySettings::setLocalDocsShowReferences(bool value)               { setBasic
 void MySettings::setLocalDocsFileExtensions(const QStringList &value) { setBasicSetting("localdocs/fileExtensions", value, "localDocsFileExtensions"); }
 void MySettings::setLocalDocsUseRemoteEmbed(bool value)               { setBasicSetting("localdocs/useRemoteEmbed", value, "localDocsUseRemoteEmbed"); }
 void MySettings::setLocalDocsNomicAPIKey(const QString &value)        { setBasicSetting("localdocs/nomicAPIKey",    value, "localDocsNomicAPIKey"); }
-void MySettings::setLocalDocsEmbedDevice(const QString &value)        { setBasicSetting("localdocs/embedDevice",    value, "localDocsEmbedDevice"); }
 void MySettings::setNetworkAttribution(const QString &value)          { setBasicSetting("network/attribution",      value, "networkAttribution"); }
 
 void MySettings::setChatTheme(ChatTheme value)           { setBasicSetting("chatTheme",      chatThemeNames     .value(int(value))); }
@@ -703,19 +703,6 @@ void MySettings::setDevice(const QString &value)
     if (device() != value) {
         m_settings.setValue("device", value);
         emit deviceChanged();
-    }
-}
-
-bool MySettings::forceMetal() const
-{
-    return m_forceMetal;
-}
-
-void MySettings::setForceMetal(bool value)
-{
-    if (m_forceMetal != value) {
-        m_forceMetal = value;
-        emit forceMetalChanged(value);
     }
 }
 

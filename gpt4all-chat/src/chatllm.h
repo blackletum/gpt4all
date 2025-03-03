@@ -3,9 +3,8 @@
 
 #include "chatmodel.h"
 #include "database.h"
+#include "llmodel/chat.h"
 #include "modellist.h"
-
-#include <gpt4all-backend/llmodel.h>
 
 #include <QByteArray>
 #include <QElapsedTimer>
@@ -91,14 +90,9 @@ inline LLModelTypeV1 parseLLModelTypeV0(int v0)
 }
 
 struct LLModelInfo {
-    std::unique_ptr<LLModel> model;
+    std::unique_ptr<gpt4all::ui::ChatLLModel> model;
     QFileInfo fileInfo;
-    std::optional<QString> fallbackReason;
-
-    // NOTE: This does not store the model type or name on purpose as this is left for ChatLLM which
-    // must be able to serialize the information even if it is in the unloaded state
-
-    void resetModel(ChatLLM *cllm, LLModel *model = nullptr);
+    void resetModel(ChatLLM *cllm, gpt4all::ui::ChatLLModel *model = nullptr);
 };
 
 class TokenTimer : public QObject {
@@ -145,9 +139,6 @@ class Chat;
 class ChatLLM : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString deviceBackend READ deviceBackend NOTIFY loadedModelInfoChanged)
-    Q_PROPERTY(QString device READ device NOTIFY loadedModelInfoChanged)
-    Q_PROPERTY(QString fallbackReason READ fallbackReason NOTIFY loadedModelInfoChanged)
 public:
     ChatLLM(Chat *parent, bool isServer = false);
     virtual ~ChatLLM();
@@ -175,27 +166,6 @@ public:
     void acquireModel();
     void resetModel();
 
-    QString deviceBackend() const
-    {
-        if (!isModelLoaded()) return QString();
-        std::string name = LLModel::GPUDevice::backendIdToName(m_llModelInfo.model->backendName());
-        return QString::fromStdString(name);
-    }
-
-    QString device() const
-    {
-        if (!isModelLoaded()) return QString();
-        const char *name = m_llModelInfo.model->gpuDeviceName();
-        return name ? QString(name) : u"CPU"_s;
-    }
-
-    // not loaded -> QString(), no fallback -> QString("")
-    QString fallbackReason() const
-    {
-        if (!isModelLoaded()) return QString();
-        return m_llModelInfo.fallbackReason.value_or(u""_s);
-    }
-
     bool serialize(QDataStream &stream, int version);
     bool deserialize(QDataStream &stream, int version);
 
@@ -211,8 +181,6 @@ public Q_SLOTS:
     void handleChatIdChanged(const QString &id);
     void handleShouldBeLoadedChanged();
     void handleThreadStarted();
-    void handleForceMetalChanged(bool forceMetal);
-    void handleDeviceChanged();
 
 Q_SIGNALS:
     void loadedModelInfoChanged();
@@ -233,8 +201,6 @@ Q_SIGNALS:
     void trySwitchContextOfLoadedModelCompleted(int value);
     void requestRetrieveFromDB(const QList<QString> &collections, const QString &text, int retrievalSize, QList<ResultInfo> *results);
     void reportSpeed(const QString &speed);
-    void reportDevice(const QString &device);
-    void reportFallbackReason(const QString &fallbackReason);
     void databaseResultsChanged(const QList<ResultInfo>&);
     void modelInfoChanged(const ModelInfo &modelInfo);
 
@@ -249,12 +215,11 @@ protected:
         QList<ResultInfo> databaseResults;
     };
 
-    ChatPromptResult promptInternalChat(const QStringList &enabledCollections, const LLModel::PromptContext &ctx,
-                                        qsizetype startOffset = 0);
+    auto promptInternalChat(const QStringList &enabledCollections, const gpt4all::backend::GenerationParams &params,
+                            qsizetype startOffset = 0) -> ChatPromptResult;
     // passing a string_view directly skips templating and uses the raw string
-    PromptResult promptInternal(const std::variant<std::span<const MessageItem>, std::string_view> &prompt,
-                                const LLModel::PromptContext &ctx,
-                                bool usedLocalDocs);
+    auto promptInternal(const std::variant<std::span<const MessageItem>, std::string_view> &prompt,
+                        const gpt4all::backend::GenerationParams &params, bool usedLocalDocs) -> PromptResult;
 
 private:
     bool loadNewModel(const ModelInfo &modelInfo, QVariantMap &modelLoadProps);
@@ -282,8 +247,6 @@ private:
     std::atomic<bool> m_forceUnloadModel;
     std::atomic<bool> m_markedForDeletion;
     bool m_isServer;
-    bool m_forceMetal;
-    bool m_reloadingToChangeVariant;
     friend class ChatViewResponseHandler;
     friend class SimpleResponseHandler;
 };

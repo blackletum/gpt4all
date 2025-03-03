@@ -227,9 +227,10 @@ if (APPLE)
 endif()
 
 qt_add_executable(chat
+    src/llmodel/provider.cpp      src/llmodel/provider.h
+    src/llmodel/openai.cpp        src/llmodel/openai.h
     src/main.cpp
     src/chat.cpp                  src/chat.h
-    src/chatapi.cpp               src/chatapi.h
     src/chatlistmodel.cpp         src/chatlistmodel.h
     src/chatllm.cpp               src/chatllm.h
     src/chatmodel.h               src/chatmodel.cpp
@@ -456,8 +457,16 @@ else()
     # Link PDFium
     target_link_libraries(chat PRIVATE pdfium)
 endif()
-target_link_libraries(chat
-    PRIVATE gpt4all-backend llmodel nlohmann_json::nlohmann_json SingleApplication fmt::fmt duckx::duckx QXlsx)
+target_link_libraries(chat PRIVATE
+    QCoro6::Core QCoro6::Network
+    QXlsx
+    SingleApplication
+    duckx::duckx
+    fmt::fmt
+    gpt4all-backend
+    llmodel
+    nlohmann_json::nlohmann_json
+)
 target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/minja/include)
 
 if (APPLE)

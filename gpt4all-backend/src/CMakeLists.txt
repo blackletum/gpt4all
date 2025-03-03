@@ -5,6 +5,7 @@ add_library(${TARGET} STATIC
     ollama-client.cpp
     ollama-types.cpp
     qt-json-stream.cpp
+    rest.cpp
 )
 target_compile_features(${TARGET} PUBLIC cxx_std_23)
 gpt4all_add_warning_options(${TARGET})

@@ -22,6 +22,7 @@ class QRestReply;
 
 namespace gpt4all::backend {
 
+
 struct ResponseError {
 public:
     struct BadStatus { int code; };
@@ -52,7 +53,7 @@ using DataOrRespErr = std::expected<T, ResponseError>;
 
 class OllamaClient {
 public:
-    OllamaClient(QUrl baseUrl, QString m_userAgent = QStringLiteral("GPT4All"))
+    OllamaClient(QUrl baseUrl, QString m_userAgent)
         : m_baseUrl(baseUrl)
         , m_userAgent(std::move(m_userAgent))
         {}

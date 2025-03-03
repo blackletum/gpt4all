@@ -7,6 +7,7 @@
 
 #include <fmt/format.h>
 #include <gpt4all-backend/formatters.h>
+#include <gpt4all-backend/generation-params.h>
 #include <gpt4all-backend/llmodel.h>
 
 #include <QByteArray>
@@ -126,7 +127,7 @@ class BaseCompletionRequest {
 public:
     QString model; // required
     // NB: some parameters are not supported yet
-    int32_t max_tokens = 16;
+    uint max_tokens = 16;
     qint64 n = 1;
     float temperature = 1.f;
     float top_p = 1.f;
@@ -161,7 +162,7 @@ protected:
 
         value = reqValue("max_tokens", Integer, false, /*min*/ 1);
         if (!value.isNull())
-            this->max_tokens = int32_t(qMin(value.toInteger(), INT32_MAX));
+            this->max_tokens = uint(qMin(value.toInteger(), UINT32_MAX));
 
         value = reqValue("n", Integer, false, /*min*/ 1);
         if (!value.isNull())
@@ -666,7 +667,7 @@ auto Server::handleCompletionRequest(const CompletionRequest &request)
     m_chatModel->appendResponse();
 
     // FIXME(jared): taking parameters from the UI inhibits reproducibility of results
-    LLModel::PromptContext promptCtx {
+    backend::GenerationParams genParams {
         .n_predict      = request.max_tokens,
         .top_k          = mySettings->modelTopK(modelInfo),
         .top_p          = request.top_p,
@@ -685,7 +686,7 @@ auto Server::handleCompletionRequest(const CompletionRequest &request)
         PromptResult result;
         try {
             result = promptInternal(std::string_view(promptUtf8.cbegin(), promptUtf8.cend()),
-                                    promptCtx,
+                                    genParams,
                                     /*usedLocalDocs*/ false);
         } catch (const std::exception &e) {
             m_chatModel->setResponseValue(e.what());
@@ -779,7 +780,7 @@ auto Server::handleChatRequest(const ChatRequest &request)
     auto startOffset = m_chatModel->appendResponseWithHistory(messages);
 
     // FIXME(jared): taking parameters from the UI inhibits reproducibility of results
-    LLModel::PromptContext promptCtx {
+    backend::GenerationParams genParams {
         .n_predict      = request.max_tokens,
         .top_k          = mySettings->modelTopK(modelInfo),
         .top_p          = request.top_p,
@@ -796,7 +797,7 @@ auto Server::handleChatRequest(const ChatRequest &request)
     for (int i = 0; i < request.n; ++i) {
         ChatPromptResult result;
         try {
-            result = promptInternalChat(m_collections, promptCtx, startOffset);
+            result = promptInternalChat(m_collections, genParams, startOffset);
         } catch (const std::exception &e) {
             m_chatModel->setResponseValue(e.what());
             m_chatModel->setError();
