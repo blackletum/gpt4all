@@ -26,7 +26,8 @@
         }                                                                        \
     }
 
-MAKE_FORMATTER(QUtf8StringView, value                    );
-MAKE_FORMATTER(QStringView,     value.toUtf8()           );
-MAKE_FORMATTER(QString,         value.toUtf8()           );
-MAKE_FORMATTER(QVariant,        value.toString().toUtf8());
+MAKE_FORMATTER(QLatin1StringView, value                    );
+MAKE_FORMATTER(QString,           value.toUtf8()           );
+MAKE_FORMATTER(QStringView,       value.toUtf8()           );
+MAKE_FORMATTER(QUtf8StringView,   value                    );
+MAKE_FORMATTER(QVariant,          value.toString().toUtf8());

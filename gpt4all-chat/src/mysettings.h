@@ -20,6 +20,7 @@
 
 // IWYU pragma: no_forward_declare QModelIndex
 class QLocale;
+namespace gpt4all::ui { class GenerationParams; }
 
 
 namespace MySettingsEnums {
@@ -54,7 +55,6 @@ using namespace MySettingsEnums;
 class MySettings : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(int threadCount READ threadCount WRITE setThreadCount NOTIFY threadCountChanged)
     Q_PROPERTY(bool systemTray READ systemTray WRITE setSystemTray NOTIFY systemTrayChanged)
     Q_PROPERTY(bool serverChat READ serverChat WRITE setServerChat NOTIFY serverChatChanged)
     Q_PROPERTY(QString modelPath READ modelPath WRITE setModelPath NOTIFY modelPathChanged)
@@ -156,9 +156,10 @@ public:
     QString modelSuggestedFollowUpPrompt(const ModelInfo &info) const;
     Q_INVOKABLE void setModelSuggestedFollowUpPrompt(const ModelInfo &info, const QString &value, bool force = false);
 
+    // TODO: implement
+    auto modelGenParams(const ModelInfo &info) -> gpt4all::ui::GenerationParams;
+
     // Application settings
-    int threadCount() const;
-    void setThreadCount(int value);
     bool systemTray() const;
     void setSystemTray(bool value);
     bool serverChat() const;
@@ -173,10 +174,6 @@ public:
     void setFontSize(FontSize value);
     QString device();
     void setDevice(const QString &value);
-    int32_t contextLength() const;
-    void setContextLength(int32_t value);
-    int32_t gpuLayers() const;
-    void setGpuLayers(int32_t value);
     SuggestionMode suggestionMode() const;
     void setSuggestionMode(SuggestionMode value);
 
@@ -231,7 +228,6 @@ Q_SIGNALS:
     void systemMessageChanged(const ModelInfo &info, bool fromInfo = false);
     void chatNamePromptChanged(const ModelInfo &info);
     void suggestedFollowUpPromptChanged(const ModelInfo &info);
-    void threadCountChanged();
     void systemTrayChanged();
     void serverChatChanged();
     void modelPathChanged();

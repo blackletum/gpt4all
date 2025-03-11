@@ -14,6 +14,10 @@ add_subdirectory(QXlsx/QXlsx)
 
 add_subdirectory(json)  # required by minja
 
+# TartanLlama
+set(FUNCTION_REF_ENABLE_TESTS OFF)
+add_subdirectory(generator)
+
 if (NOT GPT4ALL_USING_QTPDF)
     # If we do not use QtPDF, we need to get PDFium.
     set(GPT4ALL_PDFIUM_TAG "chromium/6996")

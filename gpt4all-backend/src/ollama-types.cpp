@@ -4,6 +4,7 @@
 
 #include <fmt/chrono.h> // IWYU pragma: keep
 #include <fmt/format.h>
+#include <date/date.h>
 
 #include <sstream>
 #include <string>
@@ -40,7 +41,7 @@ Time tag_invoke(const json::value_to_tag<Time> &, const json::value &value)
 
     Time time;
     std::istringstream iss(json::string_view(value.as_string()));
-    iss >> std::chrono::parse("%FT%T%Ez", time);
+    iss >> date::parse("%FT%T%Ez", time);
     if (!iss && !iss.eof())
         throw sys::system_error(std::make_error_code(std::errc::invalid_argument), __func__);
     return time;

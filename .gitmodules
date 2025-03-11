@@ -26,3 +26,9 @@
 [submodule "gpt4all-backend/deps/qcoro"]
 	path = deps/qcoro
 	url = https://github.com/nomic-ai/qcoro.git
+[submodule "gpt4all-backend/deps/date"]
+	path = gpt4all-backend/deps/date
+	url = https://github.com/HowardHinnant/date.git
+[submodule "gpt4all-chat/deps/generator"]
+	path = gpt4all-chat/deps/generator
+	url = https://github.com/TartanLlama/generator.git

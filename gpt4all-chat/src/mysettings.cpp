@@ -48,7 +48,6 @@ namespace ModelSettingsKey { namespace {
 
 namespace defaults {
 
-static const int     threadCount             = std::min(4, (int32_t) std::thread::hardware_concurrency());
 static const bool    networkIsActive         = false;
 static const bool    networkUsageStatsActive = false;
 static const QString device                  = "Auto";
@@ -254,7 +253,6 @@ void MySettings::restoreApplicationDefaults()
     setChatTheme(basicDefaults.value("chatTheme").value<ChatTheme>());
     setFontSize(basicDefaults.value("fontSize").value<FontSize>());
     setDevice(defaults::device);
-    setThreadCount(defaults::threadCount);
     setSystemTray(basicDefaults.value("systemTray").toBool());
     setServerChat(basicDefaults.value("serverChat").toBool());
     setNetworkPort(basicDefaults.value("networkPort").toInt());
@@ -594,29 +592,6 @@ void MySettings::setModelChatNamePrompt(const ModelInfo &info, const QString &va
 void MySettings::setModelSuggestedFollowUpPrompt(const ModelInfo &info, const QString &value, bool force)
 {
     setModelSetting("suggestedFollowUpPrompt", info, value, force, true);
-}
-
-int MySettings::threadCount() const
-{
-    int c = m_settings.value("threadCount", defaults::threadCount).toInt();
-    // The old thread setting likely left many people with 0 in settings config file, which means
-    // we should reset it to the default going forward
-    if (c <= 0)
-        c = defaults::threadCount;
-    c = std::max(c, 1);
-    c = std::min(c, QThread::idealThreadCount());
-    return c;
-}
-
-void MySettings::setThreadCount(int value)
-{
-    if (threadCount() == value)
-        return;
-
-    value = std::max(value, 1);
-    value = std::min(value, QThread::idealThreadCount());
-    m_settings.setValue("threadCount", value);
-    emit threadCountChanged();
 }
 
 bool        MySettings::systemTray() const              { return getBasicSetting("systemTray"              ).toBool(); }

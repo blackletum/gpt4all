@@ -227,9 +227,6 @@ if (APPLE)
 endif()
 
 qt_add_executable(chat
-    src/llmodel/provider.cpp      src/llmodel/provider.h
-    src/llmodel/openai.cpp        src/llmodel/openai.h
-    src/main.cpp
     src/chat.cpp                  src/chat.h
     src/chatlistmodel.cpp         src/chatlistmodel.h
     src/chatllm.cpp               src/chatllm.h
@@ -241,14 +238,22 @@ qt_add_executable(chat
     src/embllm.cpp                src/embllm.h
     src/jinja_helpers.cpp         src/jinja_helpers.h
     src/jinja_replacements.cpp    src/jinja_replacements.h
+    src/json-helpers.cpp          src/json-helpers.h
     src/llm.cpp                   src/llm.h
+    src/llmodel_chat.h
+    src/llmodel_ollama.cpp        src/llmodel_ollama.h
+    src/llmodel_openai.cpp        src/llmodel_openai.h
+    src/llmodel_provider.cpp      src/llmodel_provider.h
     src/localdocs.cpp             src/localdocs.h
     src/localdocsmodel.cpp        src/localdocsmodel.h
     src/logger.cpp                src/logger.h
+    src/main.cpp
     src/modellist.cpp             src/modellist.h
     src/mysettings.cpp            src/mysettings.h
     src/network.cpp               src/network.h
     src/server.cpp                src/server.h
+    src/store_base.cpp            src/store_base.h
+    src/store_provider.cpp        src/store_provider.h
     src/tool.cpp                  src/tool.h
     src/toolcallparser.cpp        src/toolcallparser.h
     src/toolmodel.cpp             src/toolmodel.h
@@ -448,8 +453,9 @@ target_compile_definitions(chat PRIVATE QT_NO_SIGNALS_SLOTS_KEYWORDS)
 target_include_directories(chat PRIVATE deps/usearch/include
                                         deps/usearch/fp16/include)
 
-target_link_libraries(chat
-    PRIVATE Qt6::Core Qt6::HttpServer Qt6::Quick Qt6::Sql Qt6::Svg)
+target_link_libraries(chat PRIVATE
+    Qt6::Core Qt6::HttpServer Qt6::Quick Qt6::Sql Qt6::Svg
+)
 if (GPT4ALL_USING_QTPDF)
     target_compile_definitions(chat PRIVATE GPT4ALL_USE_QTPDF)
     target_link_libraries(chat PRIVATE Qt6::Pdf)
@@ -458,6 +464,7 @@ else()
     target_link_libraries(chat PRIVATE pdfium)
 endif()
 target_link_libraries(chat PRIVATE
+    Boost::describe Boost::json Boost::system
     QCoro6::Core QCoro6::Network
     QXlsx
     SingleApplication
@@ -466,6 +473,7 @@ target_link_libraries(chat PRIVATE
     gpt4all-backend
     llmodel
     nlohmann_json::nlohmann_json
+    tl::generator
 )
 target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/minja/include)
 

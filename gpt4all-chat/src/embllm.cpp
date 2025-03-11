@@ -110,10 +110,6 @@ bool EmbeddingLLMWorker::loadModel()
         return false;
     }
 
-    // FIXME(jared): the user may want this to take effect without having to restart
-    int n_threads = MySettings::globalInstance()->threadCount();
-    m_model->setThreadCount(n_threads);
-
     return true;
 }
 

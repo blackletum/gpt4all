@@ -3,7 +3,7 @@
 
 #include "chatmodel.h"
 #include "database.h"
-#include "llmodel/chat.h"
+#include "llmodel_chat.h"
 #include "modellist.h"
 
 #include <QByteArray>
@@ -31,6 +31,7 @@ using namespace Qt::Literals::StringLiterals;
 
 class ChatLLM;
 class QDataStream;
+namespace QCoro { template <typename T> class Task; }
 
 
 // NOTE: values serialized to disk, do not change or reuse
@@ -88,12 +89,6 @@ inline LLModelTypeV1 parseLLModelTypeV0(int v0)
     default:                       return LLModelTypeV1::NONE;
     }
 }
-
-struct LLModelInfo {
-    std::unique_ptr<gpt4all::ui::ChatLLModel> model;
-    QFileInfo fileInfo;
-    void resetModel(ChatLLM *cllm, gpt4all::ui::ChatLLModel *model = nullptr);
-};
 
 class TokenTimer : public QObject {
     Q_OBJECT
@@ -173,7 +168,7 @@ public Q_SLOTS:
     void prompt(const QStringList &enabledCollections);
     bool loadDefaultModel();
     void trySwitchContextOfLoadedModel(const ModelInfo &modelInfo);
-    bool loadModel(const ModelInfo &modelInfo);
+    auto loadModel(const ModelInfo &modelInfo) -> QCoro::Task<bool>;
     void modelChangeRequested(const ModelInfo &modelInfo);
     void unloadModel();
     void reloadModel();
@@ -215,14 +210,16 @@ protected:
         QList<ResultInfo> databaseResults;
     };
 
-    auto promptInternalChat(const QStringList &enabledCollections, const gpt4all::backend::GenerationParams &params,
+    auto modelDescription() -> const gpt4all::ui::ModelDescription *;
+
+    auto promptInternalChat(const QStringList &enabledCollections, const gpt4all::ui::GenerationParams &params,
                             qsizetype startOffset = 0) -> ChatPromptResult;
     // passing a string_view directly skips templating and uses the raw string
     auto promptInternal(const std::variant<std::span<const MessageItem>, std::string_view> &prompt,
-                        const gpt4all::backend::GenerationParams &params, bool usedLocalDocs) -> PromptResult;
+                        const gpt4all::ui::GenerationParams &params, bool usedLocalDocs) -> QCoro::Task<PromptResult>;
 
 private:
-    bool loadNewModel(const ModelInfo &modelInfo, QVariantMap &modelLoadProps);
+    auto loadNewModel(const ModelInfo &modelInfo, QVariantMap &modelLoadProps) -> QCoro::Task<bool>;
 
     std::vector<MessageItem> forkConversation(const QString &prompt) const;
 
@@ -237,11 +234,11 @@ protected:
 
 private:
     const Chat *m_chat;
-    LLModelInfo m_llModelInfo;
-    LLModelTypeV1 m_llModelType = LLModelTypeV1::NONE;
+    std::unique_ptr<gpt4all::ui::ChatLLMInstance> m_llmInstance;
     ModelInfo m_modelInfo;
     TokenTimer *m_timer;
     QThread m_llmThread;
+    QNetworkAccessManager m_nam; // TODO(jared): avoid making multiple thread pools
     std::atomic<bool> m_stopGenerating;
     std::atomic<bool> m_shouldBeLoaded;
     std::atomic<bool> m_forceUnloadModel;

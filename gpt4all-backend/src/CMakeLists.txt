@@ -21,6 +21,7 @@ target_link_libraries(${TARGET} PUBLIC
 )
 target_link_libraries(${TARGET} PRIVATE
     QCoro6::Network
+    date::date
     fmt::fmt
 )
 

@@ -13,7 +13,6 @@
 #include <QVariant>
 #include <QtAssert>
 
-#include <coroutine>
 #include <expected>
 #include <memory>
 
@@ -28,13 +27,20 @@ namespace gpt4all::backend {
 ResponseError::ResponseError(const QRestReply *reply)
 {
     if (reply->hasError()) {
-        error = reply->networkReply()->error();
+        m_error = reply->networkReply()->error();
     } else if (!reply->isHttpStatusSuccess()) {
-        error = BadStatus(reply->httpStatus());
+        m_error = BadStatus(reply->httpStatus());
     } else
         Q_UNREACHABLE();
 
-    errorString = restErrorString(*reply);
+    m_errorString = restErrorString(*reply);
+}
+
+ResponseError::ResponseError(const boost::system::system_error &e)
+    : m_error(e.code())
+    , m_errorString(QString::fromUtf8(e.what()))
+{
+    Q_ASSERT(e.code());
 }
 
 QNetworkRequest OllamaClient::makeRequest(const QString &path) const

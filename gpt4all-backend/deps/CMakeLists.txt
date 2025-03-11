@@ -12,3 +12,5 @@ FetchContent_Declare(
     URL_HASH "SHA256=7da75f171837577a52bbf217e17f8ea576c7c246e4594d617bfde7fafd408be5"
 )
 FetchContent_MakeAvailable(boost)
+
+add_subdirectory(date)

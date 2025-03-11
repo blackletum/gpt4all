@@ -11,7 +11,6 @@
 #include <QString>
 #include <QUrl>
 
-#include <cassert>
 #include <expected>
 #include <utility>
 #include <variant>
@@ -26,26 +25,21 @@ namespace gpt4all::backend {
 struct ResponseError {
 public:
     struct BadStatus { int code; };
-
-private:
     using ErrorCode = std::variant<
         QNetworkReply::NetworkError,
         boost::system::error_code,
         BadStatus
     >;
 
-public:
-    ErrorCode error;
-    QString   errorString;
-
     ResponseError(const QRestReply *reply);
+    ResponseError(const boost::system::system_error &e);
 
-    ResponseError(const boost::system::system_error &e)
-        : error(e.code())
-        , errorString(QString::fromUtf8(e.what()))
-    {
-        assert(e.code());
-    }
+    const ErrorCode &error      () { return m_error;       }
+    const QString   &errorString() { return m_errorString; }
+
+private:
+    ErrorCode m_error;
+    QString   m_errorString;
 };
 
 template <typename T>

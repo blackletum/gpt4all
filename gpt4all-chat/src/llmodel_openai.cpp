@@ -1,4 +1,4 @@
-#include "openai.h"
+#include "llmodel_openai.h"
 
 #include "mysettings.h"
 #include "utils.h"
@@ -6,29 +6,34 @@
 #include <QCoro/QCoroAsyncGenerator> // IWYU pragma: keep
 #include <QCoro/QCoroNetworkReply> // IWYU pragma: keep
 #include <fmt/format.h>
-#include <gpt4all-backend/formatters.h>
-#include <gpt4all-backend/generation-params.h>
+#include <gpt4all-backend/formatters.h> // IWYU pragma: keep
 #include <gpt4all-backend/rest.h>
 
+#include <QAnyStringView>
 #include <QByteArray>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QLatin1String>
-#include <QNetworkAccessManager>
+#include <QList>
+#include <QMap>
+#include <QMetaEnum>
+#include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRestAccessManager>
 #include <QRestReply>
+#include <QSet>
 #include <QStringView>
-#include <QUrl>
 #include <QUtf8StringView> // IWYU pragma: keep
 #include <QVariant>
 #include <QXmlStreamReader>
-#include <Qt>
+#include <QtAssert>
 
+#include <coroutine>
 #include <expected>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 
 using namespace Qt::Literals::StringLiterals;
@@ -63,24 +68,72 @@ static auto processRespLine(const QByteArray &line) -> std::optional<QString>
 namespace gpt4all::ui {
 
 
-void OpenaiModelDescription::setDisplayName(QString value)
+void OpenaiGenerationParams::parseInner(QMap<GenerationParam, QVariant> &values)
 {
-    if (m_displayName != value) {
-        m_displayName = std::move(value);
-        emit displayNameChanged(m_displayName);
-    }
+    tryParseValue(values, GenerationParam::NPredict,    &OpenaiGenerationParams::n_predict  );
+    tryParseValue(values, GenerationParam::Temperature, &OpenaiGenerationParams::temperature);
+    tryParseValue(values, GenerationParam::TopP,        &OpenaiGenerationParams::top_p      );
 }
 
-void OpenaiModelDescription::setModelName(QString value)
+auto OpenaiGenerationParams::toMap() const -> QMap<QLatin1StringView, QVariant>
 {
-    if (m_modelName != value) {
-        m_modelName = std::move(value);
-        emit modelNameChanged(m_modelName);
-    }
+    return {
+        {  "max_completion_tokens"_L1,  n_predict   },
+        {  "temperature"_L1,            temperature },
+        {  "top_p"_L1,                  top_p       },
+    };
 }
 
-OpenaiLLModel::OpenaiLLModel(OpenaiConnectionDetails connDetails, QNetworkAccessManager *nam)
-    : m_connDetails(std::move(connDetails))
+auto OpenaiProvider::supportedGenerationParams() const -> QSet<GenerationParam>
+{
+    using enum GenerationParam;
+    return { NPredict, Temperature, TopP };
+}
+
+auto OpenaiProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const
+    -> OpenaiGenerationParams *
+{ return new OpenaiGenerationParams(values); }
+
+OpenaiProviderBuiltin::OpenaiProviderBuiltin(QUuid id, QString name, QUrl baseUrl, QString apiKey)
+    : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
+    , OpenaiProvider(std::move(apiKey))
+    {}
+
+/// load
+OpenaiProviderCustom::OpenaiProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id)
+    : ModelProvider(std::move(id))
+    , ModelProviderCustom(std::move(store))
+{
+    auto &details = load();
+    m_apiKey = std::get<OpenaiProviderDetails>(details).api_key;
+}
+
+/// create
+OpenaiProviderCustom::OpenaiProviderCustom(std::shared_ptr<ProviderStore> store, QString name, QUrl baseUrl,
+                                           QString apiKey)
+    : ModelProvider(std::move(name), std::move(baseUrl))
+    , ModelProviderCustom(std::move(store))
+    , OpenaiProvider(std::move(apiKey))
+{
+    auto data = m_store->create(m_name, m_baseUrl, m_apiKey);
+    if (!data)
+        data.error().raise();
+    m_id = (*data)->id;
+}
+
+OpenaiModelDescription::OpenaiModelDescription(std::shared_ptr<const OpenaiProvider> provider, QString modelName)
+    : m_provider(std::move(provider))
+    , m_modelName(std::move(modelName))
+    {}
+
+auto OpenaiModelDescription::newInstance(QNetworkAccessManager *nam) const -> std::unique_ptr<OpenaiChatModel>
+{ return std::unique_ptr<OpenaiChatModel>(&dynamic_cast<OpenaiChatModel &>(*newInstanceImpl(nam))); }
+
+auto OpenaiModelDescription::newInstanceImpl(QNetworkAccessManager *nam) const -> ChatLLMInstance *
+{ return new OpenaiChatModel({ shared_from_this(), this }, nam); }
+
+OpenaiChatModel::OpenaiChatModel(std::shared_ptr<const OpenaiModelDescription> description, QNetworkAccessManager *nam)
+    : m_description(std::move(description))
     , m_nam(nam)
     {}
 
@@ -159,21 +212,22 @@ static auto parsePrompt(QXmlStreamReader &xml) -> std::expected<QJsonArray, QStr
     }
 }
 
-auto OpenaiLLModel::chat(QStringView prompt, const backend::GenerationParams &params,
-                         /*out*/ ChatResponseMetadata &metadata) -> QCoro::AsyncGenerator<QString>
+auto preload() -> QCoro::Task<>
+{ co_return; /* not supported -> no-op */ }
+
+auto OpenaiChatModel::generate(QStringView prompt, const GenerationParams &params,
+                               /*out*/ ChatResponseMetadata &metadata) -> QCoro::AsyncGenerator<QString>
 {
     auto *mySettings = MySettings::globalInstance();
 
-    if (!params.n_predict)
+    if (params.isNoop())
         co_return; // nothing requested
 
     auto reqBody = makeJsonObject({
-        { "model"_L1,                 m_connDetails.modelName  },
-        { "max_completion_tokens"_L1, qint64(params.n_predict) },
-        { "stream"_L1,                true                     },
-        { "temperature"_L1,           params.temperature       },
-        { "top_p"_L1,                 params.top_p             },
+        { "model"_L1,  m_description->modelName() },
+        { "stream"_L1, true                       },
     });
+    extend(reqBody, params.toMap());
 
     // conversation history
     {
@@ -184,9 +238,10 @@ auto OpenaiLLModel::chat(QStringView prompt, const backend::GenerationParams &pa
         reqBody.insert("messages"_L1, *messages);
     }
 
-    QNetworkRequest request(m_connDetails.baseUrl.resolved(QUrl("/v1/chat/completions")));
+    auto &provider = *m_description->provider();
+    QNetworkRequest request(provider.baseUrl().resolved(QUrl("/v1/chat/completions")));
     request.setHeader(QNetworkRequest::UserAgentHeader, mySettings->userAgent());
-    request.setRawHeader("authorization", u"Bearer %1"_s.arg(m_connDetails.apiKey).toUtf8());
+    request.setRawHeader("authorization", u"Bearer %1"_s.arg(provider.apiKey()).toUtf8());
 
     QRestAccessManager restNam(m_nam);
     std::unique_ptr<QNetworkReply> reply(restNam.post(request, QJsonDocument(reqBody)));

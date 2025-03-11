@@ -49,7 +49,6 @@ You can **clone** an existing model, which allows you to save a configuration of
     |----------------------------|------------------------------------------|-----------|
     | **Context Length**         | Maximum length of input sequence in tokens        | 2048      |
     | **Max Length**             | Maximum length of response in tokens     | 4096      |
-    | **Prompt Batch Size**      | Token batch size for parallel processing | 128      |
     | **Temperature**            | Lower temperature gives more likely generations | 0.7       |
     | **Top P**                  | Prevents choosing highly unlikely tokens  | 0.4       |
     | **Top K**                  | Size of selection pool for tokens         | 40        |
