@@ -1,5 +1,7 @@
 #pragma once
 
+#include "llmodel_provider.h" // IWYU pragma: keep
+
 #include <QObject>
 #include <QVariant>
 
@@ -12,7 +14,6 @@ namespace gpt4all::ui {
 
 
 class ChatLLMInstance;
-class ModelProvider;
 
 // TODO: implement shared_from_this guidance for restricted construction
 class ModelDescription : public std::enable_shared_from_this<ModelDescription> {

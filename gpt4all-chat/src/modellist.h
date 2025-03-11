@@ -77,7 +77,7 @@ private:
 struct ModelInfo {
     Q_GADGET
     Q_PROPERTY(QString id READ id WRITE setId)
-    Q_PROPERTY(const ModelDescription *modelDesc READ modelDescQt WRITE setModelDescQt)
+    Q_PROPERTY(const gpt4all::ui::ModelDescription *modelDesc READ modelDescQt WRITE setModelDescQt)
     Q_PROPERTY(QString name READ name WRITE setName)
     Q_PROPERTY(QString filename READ filename WRITE setFilename)
     Q_PROPERTY(QString dirpath MEMBER dirpath)
@@ -140,12 +140,13 @@ public:
     QString id() const;
     void setId(const QString &id);
 
-    auto modelDesc() const -> const std::shared_ptr<const gpt4all::ui::ModelDescription> &;
+    auto modelDesc() const -> const std::shared_ptr<const gpt4all::ui::ModelDescription> &
+    { return m_modelDesc; }
     auto modelDescQt() const -> const gpt4all::ui::ModelDescription *
     { return modelDesc().get(); }
 
     void setModelDesc(std::shared_ptr<const gpt4all::ui::ModelDescription> value);
-    void setModelDescQt(const gpt4all::ui::ModelDescription *); // TODO: implement
+    void setModelDescQt(const gpt4all::ui::ModelDescription *value);
 
     QString name() const;
     void setName(const QString &name);
@@ -257,7 +258,7 @@ private:
     QVariant getField(QLatin1StringView name) const;
 
     QString m_id;
-    std::shared_ptr<const gpt4all::ui::ModelDescription> m_modelDesc;
+    std::shared_ptr<const gpt4all::ui::ModelDescription> m_modelDesc; // TODO: set this somewhere
     QString m_name;
     QString m_filename;
     QString m_description;

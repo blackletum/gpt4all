@@ -2,6 +2,7 @@
 
 #include "chatllm.h"
 #include "config.h"
+#include "llmodel_provider.h"
 #include "modellist.h"
 
 #include <gpt4all-backend/llmodel.h>
@@ -31,6 +32,7 @@
 #endif
 
 using namespace Qt::Literals::StringLiterals;
+using namespace gpt4all::ui;
 
 
 // used only for settings serialization, do not translate
@@ -351,6 +353,28 @@ double    MySettings::modelRepeatPenalty          (const ModelInfo &info) const 
 int       MySettings::modelRepeatPenaltyTokens    (const ModelInfo &info) const { return getModelSetting("repeatPenaltyTokens",     info).toInt(); }
 QString   MySettings::modelChatNamePrompt         (const ModelInfo &info) const { return getModelSetting("chatNamePrompt",          info).toString(); }
 QString   MySettings::modelSuggestedFollowUpPrompt(const ModelInfo &info) const { return getModelSetting("suggestedFollowUpPrompt", info).toString(); }
+
+auto MySettings::modelGenParams(const ModelInfo &info) -> std::unique_ptr<GenerationParams>
+{
+#if 0
+    // this coed is copied from server.cpp.
+    std::unique_ptr<GenerationParams> genParams;
+    {
+        using enum GenerationParam;
+        QMap<GenerationParam, QVariant> values;
+        if (auto v = request.max_tokens ) values.insert(NPredict,    *v);
+        if (auto v = request.temperature) values.insert(Temperature, *v);
+        if (auto v = request.top_p      ) values.insert(TopP,        *v);
+        if (auto v = request.min_p      ) values.insert(MinP,        *v);
+        try {
+            genParams.reset(modelProvider()->makeGenerationParams(values));
+        } catch (const std::exception &e) {
+            throw InvalidRequestError(e.what());
+        }
+    }
+#endif
+    return nullptr; // TODO: implement
+}
 
 auto MySettings::getUpgradeableModelSetting(
     const ModelInfo &info, QLatin1StringView legacyKey, QLatin1StringView newKey

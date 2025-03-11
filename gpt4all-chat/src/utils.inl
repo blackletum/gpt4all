@@ -36,9 +36,7 @@ inline auto toFSPath(const QString &str) -> std::filesystem::path
              reinterpret_cast<const char16_t *>(str.cend  ())  };
 }
 
-FileError::FileError(const QString &str, QFileDevice::FileError code)
+inline FileError::FileError(const QString &str, QFileDevice::FileError code)
     : std::runtime_error(str.toUtf8().constData())
     , m_code(code)
-{
-    Q_ASSERT(code);
-}
+{ Q_ASSERT(code); }

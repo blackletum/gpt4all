@@ -21,6 +21,8 @@ auto OllamaGenerationParams::toMap() const -> QMap<QLatin1StringView, QVariant>
     };
 }
 
+OllamaProvider::~OllamaProvider() noexcept = default;
+
 auto OllamaProvider::supportedGenerationParams() const -> QSet<GenerationParam>
 {
     using enum GenerationParam;
@@ -70,7 +72,7 @@ auto OllamaChatModel::preload() -> QCoro::Task<>
     co_return;
 }
 
-auto OllamaChatModel::generate(QStringView prompt, const GenerationParams &params,
+auto OllamaChatModel::generate(QStringView prompt, const GenerationParams *params,
                                /*out*/ ChatResponseMetadata &metadata)
     -> QCoro::AsyncGenerator<QString>
 {

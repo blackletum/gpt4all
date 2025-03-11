@@ -156,8 +156,7 @@ public:
     QString modelSuggestedFollowUpPrompt(const ModelInfo &info) const;
     Q_INVOKABLE void setModelSuggestedFollowUpPrompt(const ModelInfo &info, const QString &value, bool force = false);
 
-    // TODO: implement
-    auto modelGenParams(const ModelInfo &info) -> gpt4all::ui::GenerationParams;
+    auto modelGenParams(const ModelInfo &info) -> std::unique_ptr<gpt4all::ui::GenerationParams>;
 
     // Application settings
     bool systemTray() const;

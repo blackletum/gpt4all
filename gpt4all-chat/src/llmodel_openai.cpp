@@ -84,6 +84,8 @@ auto OpenaiGenerationParams::toMap() const -> QMap<QLatin1StringView, QVariant>
     };
 }
 
+OpenaiProvider::~OpenaiProvider() noexcept = default;
+
 auto OpenaiProvider::supportedGenerationParams() const -> QSet<GenerationParam>
 {
     using enum GenerationParam;
@@ -212,22 +214,22 @@ static auto parsePrompt(QXmlStreamReader &xml) -> std::expected<QJsonArray, QStr
     }
 }
 
-auto preload() -> QCoro::Task<>
+auto OpenaiChatModel::preload() -> QCoro::Task<>
 { co_return; /* not supported -> no-op */ }
 
-auto OpenaiChatModel::generate(QStringView prompt, const GenerationParams &params,
+auto OpenaiChatModel::generate(QStringView prompt, const GenerationParams *params,
                                /*out*/ ChatResponseMetadata &metadata) -> QCoro::AsyncGenerator<QString>
 {
     auto *mySettings = MySettings::globalInstance();
 
-    if (params.isNoop())
+    if (params->isNoop())
         co_return; // nothing requested
 
     auto reqBody = makeJsonObject({
         { "model"_L1,  m_description->modelName() },
         { "stream"_L1, true                       },
     });
-    extend(reqBody, params.toMap());
+    extend(reqBody, params->toMap());
 
     // conversation history
     {

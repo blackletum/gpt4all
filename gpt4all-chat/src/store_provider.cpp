@@ -17,7 +17,7 @@ auto ProviderStore::create(QString name, QUrl base_url, QString api_key)
 auto ProviderStore::create(QString name, QUrl base_url)
     -> DataStoreResult<const ModelProviderData *>
 {
-    ModelProviderData data { QUuid::createUuid(), ProviderType::ollama, name, std::move(base_url) };
+    ModelProviderData data { QUuid::createUuid(), ProviderType::ollama, name, std::move(base_url), {} };
     return createImpl(std::move(data), name);
 }
 

@@ -14,6 +14,8 @@ namespace fs = std::filesystem;
 namespace gpt4all::ui {
 
 
+GenerationParams::~GenerationParams() noexcept = default;
+
 void GenerationParams::parse(QMap<GenerationParam, QVariant> values)
 {
     parseInner(values);
@@ -37,6 +39,8 @@ QVariant GenerationParams::tryParseValue(QMap<GenerationParam, QVariant> &values
     }
     return value;
 }
+
+ModelProvider::~ModelProvider() noexcept = default;
 
 ModelProviderCustom::~ModelProviderCustom() noexcept
 {

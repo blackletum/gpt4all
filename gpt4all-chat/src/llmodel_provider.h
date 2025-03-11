@@ -97,9 +97,6 @@ class ModelProviderBuiltin : public virtual ModelProvider {
     Q_GADGET
     Q_PROPERTY(QString name    READ name    CONSTANT)
     Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
-
-public:
-    ~ModelProviderBuiltin() noexcept override = 0;
 };
 
 class ModelProviderCustom : public virtual ModelProvider {

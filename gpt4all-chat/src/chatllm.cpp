@@ -127,7 +127,7 @@ struct PromptModelWithToolsResult {
     bool                 shouldExecuteToolCall;
 };
 static auto promptModelWithTools(
-    ChatLLMInstance *model, BaseResponseHandler &respHandler, const GenerationParams &params, const QByteArray &prompt,
+    ChatLLMInstance *model, BaseResponseHandler &respHandler, const GenerationParams *params, const QByteArray &prompt,
     const QStringList &toolNames
 ) -> QCoro::Task<PromptModelWithToolsResult>
 {
@@ -499,8 +499,8 @@ void ChatLLM::modelChangeRequested(const ModelInfo &modelInfo)
     }
 }
 
-auto ChatLLM::modelDescription() -> const ModelDescription *
-{ return m_llmInstance->description(); }
+auto ChatLLM::modelProvider() -> const ModelProvider *
+{ return m_llmInstance->description()->provider(); }
 
 void ChatLLM::prompt(const QStringList &enabledCollections)
 {
@@ -512,7 +512,7 @@ void ChatLLM::prompt(const QStringList &enabledCollections)
     }
 
     try {
-        promptInternalChat(enabledCollections, mySettings->modelGenParams(m_modelInfo));
+        QCoro::waitFor(promptInternalChat(enabledCollections, mySettings->modelGenParams(m_modelInfo).get()));
     } catch (const std::exception &e) {
         // FIXME(jared): this is neither translated nor serialized
         m_chatModel->setResponseValue(u"Error: %1"_s.arg(QString::fromUtf8(e.what())));
@@ -641,8 +641,8 @@ std::string ChatLLM::applyJinjaTemplate(std::span<const MessageItem> items) cons
     Q_UNREACHABLE();
 }
 
-auto ChatLLM::promptInternalChat(const QStringList &enabledCollections, const GenerationParams &params,
-                                 qsizetype startOffset) -> ChatPromptResult
+auto ChatLLM::promptInternalChat(const QStringList &enabledCollections, const GenerationParams *params,
+                                 qsizetype startOffset) -> QCoro::Task<ChatPromptResult>
 {
     Q_ASSERT(isModelLoaded());
     Q_ASSERT(m_chatModel);
@@ -679,8 +679,8 @@ auto ChatLLM::promptInternalChat(const QStringList &enabledCollections, const Ge
     auto messageItems = getChat();
     messageItems.pop_back(); // exclude new response
 
-    auto result = promptInternal(messageItems, params, !databaseResults.isEmpty());
-    return {
+    auto result = co_await promptInternal(messageItems, params, !databaseResults.isEmpty());
+    co_return {
         /*PromptResult*/ {
             .response       = std::move(result.response),
             .promptTokens   = result.promptTokens,
@@ -748,7 +748,7 @@ private:
 };
 
 auto ChatLLM::promptInternal(
-    const std::variant<std::span<const MessageItem>, std::string_view> &prompt, const GenerationParams &params,
+    const std::variant<std::span<const MessageItem>, std::string_view> &prompt, const GenerationParams *params,
     bool usedLocalDocs
 ) -> QCoro::Task<PromptResult>
 {
@@ -967,7 +967,7 @@ void ChatLLM::generateName()
         // TODO: support interruption via m_stopGenerating
         promptModelWithTools(
             m_llmInstance.get(),
-            respHandler, mySettings->modelGenParams(m_modelInfo),
+            respHandler, mySettings->modelGenParams(m_modelInfo).get(),
             applyJinjaTemplate(forkConversation(chatNamePrompt)).c_str(),
             { ToolCallConstants::ThinkTagName }
         );
@@ -1043,7 +1043,7 @@ void ChatLLM::generateQuestions(qint64 elapsed)
         // TODO: support interruption via m_stopGenerating
         promptModelWithTools(
             m_llmInstance.get(),
-            respHandler, mySettings->modelGenParams(m_modelInfo),
+            respHandler, mySettings->modelGenParams(m_modelInfo).get(),
             applyJinjaTemplate(forkConversation(suggestedFollowUpPrompt)).c_str(),
             { ToolCallConstants::ThinkTagName }
         );

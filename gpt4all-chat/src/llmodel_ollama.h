@@ -50,7 +50,7 @@ public:
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OllamaGenerationParams * override;
 };
 
-class OllamaProviderBuiltin : public ModelProviderBuiltin, public OllamaProvider {
+class OllamaProviderBuiltin : public OllamaProvider, public ModelProviderBuiltin {
     Q_GADGET
 
 public:
@@ -109,7 +109,7 @@ public:
 
     auto preload() -> QCoro::Task<void> override;
 
-    auto generate(QStringView prompt, const GenerationParams &params, /*out*/ ChatResponseMetadata &metadata)
+    auto generate(QStringView prompt, const GenerationParams *params, /*out*/ ChatResponseMetadata &metadata)
         -> QCoro::AsyncGenerator<QString> override;
 
 private:

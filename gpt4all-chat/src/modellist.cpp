@@ -2,6 +2,7 @@
 
 #include "download.h"
 #include "jinja_replacements.h"
+#include "llmodel_description.h"
 #include "mysettings.h"
 #include "network.h"
 
@@ -46,6 +47,7 @@
 #include <utility>
 
 using namespace Qt::Literals::StringLiterals;
+using namespace gpt4all::ui;
 
 //#define USE_LOCAL_MODELSJSON
 
@@ -89,6 +91,12 @@ void ModelInfo::setId(const QString &id)
 {
     m_id = id;
 }
+
+void ModelInfo::setModelDesc(std::shared_ptr<const ModelDescription> value)
+{ m_modelDesc = std::move(value); }
+
+void ModelInfo::setModelDescQt(const ModelDescription *value)
+{ return setModelDesc(value->shared_from_this()); }
 
 QString ModelInfo::name() const
 {

@@ -22,11 +22,11 @@ struct ChatResponseMetadata {
 // TODO: implement two of these; one based on Ollama (TBD) and the other based on OpenAI (chatapi.h)
 class ChatLLMInstance {
 public:
-    virtual ~ChatLLMInstance() = 0;
+    virtual ~ChatLLMInstance() noexcept = 0;
 
     virtual auto description() const -> const ModelDescription * = 0;
     virtual auto preload() -> QCoro::Task<void> = 0;
-    virtual auto generate(QStringView prompt, const GenerationParams &params, /*out*/ ChatResponseMetadata &metadata)
+    virtual auto generate(QStringView prompt, const GenerationParams *params, /*out*/ ChatResponseMetadata &metadata)
         -> QCoro::AsyncGenerator<QString> = 0;
 };
 

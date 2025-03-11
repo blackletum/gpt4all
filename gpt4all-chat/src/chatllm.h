@@ -6,6 +6,8 @@
 #include "llmodel_chat.h"
 #include "modellist.h"
 
+#include <QCoro/QCoroTask> // IWYU pragma: keep
+
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -32,6 +34,7 @@ using namespace Qt::Literals::StringLiterals;
 class ChatLLM;
 class QDataStream;
 namespace QCoro { template <typename T> class Task; }
+namespace gpt4all::ui { class ModelProvider; }
 
 
 // NOTE: values serialized to disk, do not change or reuse
@@ -210,13 +213,13 @@ protected:
         QList<ResultInfo> databaseResults;
     };
 
-    auto modelDescription() -> const gpt4all::ui::ModelDescription *;
+    auto modelProvider() -> const gpt4all::ui::ModelProvider *;
 
-    auto promptInternalChat(const QStringList &enabledCollections, const gpt4all::ui::GenerationParams &params,
-                            qsizetype startOffset = 0) -> ChatPromptResult;
+    auto promptInternalChat(const QStringList &enabledCollections, const gpt4all::ui::GenerationParams *params,
+                            qsizetype startOffset = 0) -> QCoro::Task<ChatPromptResult>;
     // passing a string_view directly skips templating and uses the raw string
     auto promptInternal(const std::variant<std::span<const MessageItem>, std::string_view> &prompt,
-                        const gpt4all::ui::GenerationParams &params, bool usedLocalDocs) -> QCoro::Task<PromptResult>;
+                        const gpt4all::ui::GenerationParams *params, bool usedLocalDocs) -> QCoro::Task<PromptResult>;
 
 private:
     auto loadNewModel(const ModelInfo &modelInfo, QVariantMap &modelLoadProps) -> QCoro::Task<bool>;

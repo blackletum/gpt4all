@@ -63,7 +63,7 @@ protected:
     QString m_apiKey;
 };
 
-class OpenaiProviderBuiltin : public ModelProviderBuiltin, public OpenaiProvider {
+class OpenaiProviderBuiltin : public OpenaiProvider, public ModelProviderBuiltin {
     Q_GADGET
     Q_PROPERTY(QString apiKey READ apiKey CONSTANT)
 
@@ -127,7 +127,7 @@ public:
 
     auto preload() -> QCoro::Task<void> override;
 
-    auto generate(QStringView prompt, const GenerationParams &params, /*out*/ ChatResponseMetadata &metadata)
+    auto generate(QStringView prompt, const GenerationParams *params, /*out*/ ChatResponseMetadata &metadata)
         -> QCoro::AsyncGenerator<QString> override;
 
 private:

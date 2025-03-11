@@ -7,6 +7,8 @@
 namespace gpt4all::ui {
 
 
+ModelDescription::~ModelDescription() noexcept = default;
+
 auto ModelDescription::newInstance(QNetworkAccessManager *nam) const -> std::unique_ptr<ChatLLMInstance>
 { return std::unique_ptr<ChatLLMInstance>(newInstanceImpl(nam)); }
 

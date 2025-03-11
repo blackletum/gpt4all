@@ -240,7 +240,8 @@ qt_add_executable(chat
     src/jinja_replacements.cpp    src/jinja_replacements.h
     src/json-helpers.cpp          src/json-helpers.h
     src/llm.cpp                   src/llm.h
-    src/llmodel_chat.h
+    src/llmodel_chat.h            src/llmodel_chat.cpp
+    src/llmodel_description.h     src/llmodel_description.cpp
     src/llmodel_ollama.cpp        src/llmodel_ollama.h
     src/llmodel_openai.cpp        src/llmodel_openai.h
     src/llmodel_provider.cpp      src/llmodel_provider.h
