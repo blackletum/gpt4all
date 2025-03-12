@@ -34,18 +34,18 @@ auto OllamaProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> 
 { return new OllamaGenerationParams(values); }
 
 /// load
-OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id, QString name, QUrl baseUrl)
+OllamaProviderCustom::OllamaProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl)
     : ModelProvider      (std::move(id), std::move(name), std::move(baseUrl))
-    , ModelProviderCustom(std::move(store))
+    , ModelProviderCustom(store)
 {
     if (auto res = m_store->acquire(m_id); !res)
         res.error().raise();
 }
 
 /// create
-OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QString name, QUrl baseUrl)
+OllamaProviderCustom::OllamaProviderCustom(ProviderStore *store, QString name, QUrl baseUrl)
     : ModelProvider      (std::move(name), std::move(baseUrl))
-    , ModelProviderCustom(std::move(store))
+    , ModelProviderCustom(store)
 {
     auto data = m_store->create(m_name, m_baseUrl);
     if (!data)
@@ -57,8 +57,6 @@ auto OllamaProviderCustom::asData() -> ModelProviderData
 {
     return {
         .id               = m_id,
-        .builtin          = false,
-        .type             = ProviderType::ollama,
         .custom_details   = CustomProviderDetails { m_name, m_baseUrl },
         .provider_details = {},
     };

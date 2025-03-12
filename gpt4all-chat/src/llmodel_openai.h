@@ -62,12 +62,15 @@ public:
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OpenaiGenerationParams * override;
 
+Q_SIGNALS:
+    void apiKeyChanged(const QString &value);
+
 protected:
     QString m_apiKey;
 };
 
-class OpenaiProviderBuiltin : public OpenaiProvider, private ModelProviderMutable {
-    Q_GADGET
+class OpenaiProviderBuiltin : public OpenaiProvider, public ModelProviderMutable {
+    Q_OBJECT
     Q_PROPERTY(QString name    READ name    CONSTANT)
     Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
 

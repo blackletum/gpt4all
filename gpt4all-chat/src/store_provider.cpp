@@ -15,17 +15,17 @@ namespace gpt4all::ui {
 void tag_invoke(const boost::json::value_from_tag &, boost::json::value &jv, ModelProviderData data)
 {
     auto &obj = jv.emplace_object();
-    obj = { { "id",      data.id              },
-            { "builtin", !data.custom_details },
-            { "type",    data.type()          } };
+    obj = { { "id",      json::value_from(data.id)     },
+            { "builtin", !data.custom_details          },
+            { "type",    json::value_from(data.type()) } };
     if (auto custom = data.custom_details) {
-        obj.emplace("name",     custom->name);
-        obj.emplace("base_url", custom->base_url);
+        obj.emplace("name",     json::value_from(custom->name));
+        obj.emplace("base_url", json::value_from(custom->base_url));
     }
     switch (data.type()) {
         using enum ProviderType;
     case openai:
-        obj.emplace("api_key", std::get<size_t(openai)>(data.provider_details).api_key);
+        obj.emplace("api_key", json::value_from(std::get<size_t(openai)>(data.provider_details).api_key));
     case ollama:
         ;
     }

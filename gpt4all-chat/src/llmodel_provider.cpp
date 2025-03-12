@@ -63,10 +63,10 @@ ProviderRegistry::ProviderRegistry(PathSet paths)
 void ProviderRegistry::load()
 {
     for (auto &p : s_builtinProviders) { // (not all builtin providers are stored)
-        auto provider = std::make_shared<OpenaiProviderBuiltin>(m_builtinStore, p.id, p.name, p.base_url);
+        auto provider = std::make_shared<OpenaiProviderBuiltin>(&m_builtinStore, p.id, p.name, p.base_url);
         auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
         if (!unique)
-            throw std::logic_error(fmt::format("duplicate builtin provider id: {}", p.id));
+            throw std::logic_error(fmt::format("duplicate builtin provider id: {}", p.id.toString()));
     }
     for (auto &p : m_customStore.list()) { // disk is source of truth for custom providers
         if (!p.custom_details) {
@@ -75,15 +75,17 @@ void ProviderRegistry::load()
         }
         auto &cust = *p.custom_details;
         std::shared_ptr<ModelProviderCustom> provider;
-        switch (p.type) {
+        switch (p.type()) {
             using enum ProviderType;
         case ollama:
             provider = std::make_shared<OllamaProviderCustom>(
                 &m_customStore, p.id, cust.name, cust.base_url
             );
+            break;
         case openai:
             provider = std::make_shared<OpenaiProviderCustom>(
-                &m_customStore, p.id, cust.name, cust.base_url, p.openai_details.value().api_key
+                &m_customStore, p.id, cust.name, cust.base_url,
+                std::get<size_t(ProviderType::openai)>(p.provider_details).api_key
             );
         }
         auto [_, unique] = m_providers.emplace(p.id, std::move(provider));

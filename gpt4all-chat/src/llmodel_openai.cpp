@@ -104,7 +104,7 @@ OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QSt
     if (!res)
         res.error().raise();
     if (auto maybeData = *res) {
-        auto &details = (*maybeData)->openai_details.value();
+        auto &details = std::get<size_t(ProviderType::openai)>((*maybeData)->provider_details);
         m_apiKey = details.api_key;
     }
 }
@@ -112,10 +112,9 @@ OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QSt
 auto OpenaiProviderBuiltin::asData() -> ModelProviderData
 {
     return {
-        .id             = m_id,
-        .type           = ProviderType::openai,
-        .custom_details = {},
-        .openai_details = OpenaiProviderDetails { m_apiKey },
+        .id               = m_id,
+        .custom_details   = {},
+        .provider_details = OpenaiProviderDetails { m_apiKey },
     };
 }
 
@@ -141,10 +140,9 @@ OpenaiProviderCustom::OpenaiProviderCustom(ProviderStore *store, QString name, Q
 auto OpenaiProviderCustom::asData() -> ModelProviderData
 {
     return {
-        .id             = m_id,
-        .type           = ProviderType::openai,
-        .custom_details = CustomProviderDetails { m_name, m_baseUrl },
-        .openai_details = OpenaiProviderDetails { m_apiKey          },
+        .id               = m_id,
+        .custom_details   = CustomProviderDetails { m_name, m_baseUrl },
+        .provider_details = OpenaiProviderDetails { m_apiKey          },
     };
 }
 

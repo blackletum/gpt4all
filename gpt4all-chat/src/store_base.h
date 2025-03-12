@@ -104,7 +104,7 @@ public:
     [[nodiscard]] auto operator[](const QUuid &id) const -> const T &
     { return m_entries.at(id); }
     [[nodiscard]] auto find(const QUuid &id) const -> std::optional<const T *>
-    { auto it = m_entries.find(id); return it == m_entries.end() ? std::nullopt : std::optional(&*it); }
+    { auto it = m_entries.find(id); return it == m_entries.end() ? std::nullopt : std::optional(&it->second); }
 
 protected:
     auto createImpl(T data, const QString &name) -> DataStoreResult<const T *>;
