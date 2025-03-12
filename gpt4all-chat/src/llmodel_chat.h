@@ -19,7 +19,6 @@ struct ChatResponseMetadata {
     int nResponseTokens;
 };
 
-// TODO: implement two of these; one based on Ollama (TBD) and the other based on OpenAI (chatapi.h)
 class ChatLLMInstance {
 public:
     virtual ~ChatLLMInstance() noexcept = 0;

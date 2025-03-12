@@ -50,8 +50,10 @@ public:
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OllamaGenerationParams * override;
 };
 
-class OllamaProviderBuiltin : public OllamaProvider, public ModelProviderBuiltin {
+class OllamaProviderBuiltin : public OllamaProvider {
     Q_GADGET
+    Q_PROPERTY(QString name    READ name    CONSTANT)
+    Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
 
 public:
     /// Create a new built-in Ollama provider (transient).
@@ -64,18 +66,17 @@ class OllamaProviderCustom final : public OllamaProvider, public ModelProviderCu
 
 public:
     /// Load an existing OllamaProvider from disk.
-    explicit OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id);
+    explicit OllamaProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl);
 
     /// Create a new OllamaProvider on disk.
-    explicit OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QString name, QUrl baseUrl);
+    explicit OllamaProviderCustom(ProviderStore *store, QString name, QUrl baseUrl);
 
 Q_SIGNALS:
     void nameChanged   (const QString &value);
     void baseUrlChanged(const QUrl    &value);
 
 protected:
-    auto asData() -> ModelProviderData override
-    { return { m_id, ProviderType::ollama, m_name, m_baseUrl, {} }; }
+    auto asData() -> ModelProviderData override;
 };
 
 class OllamaModelDescription : public ModelDescription {
@@ -83,7 +84,11 @@ class OllamaModelDescription : public ModelDescription {
     Q_PROPERTY(QByteArray modelHash READ modelHash CONSTANT)
 
 public:
-    explicit OllamaModelDescription(std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash);
+    explicit OllamaModelDescription(protected_t, std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash);
+
+    static auto create(std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash)
+        -> std::shared_ptr<OllamaModelDescription>
+    { return std::make_shared<OllamaModelDescription>(protected_t(), std::move(provider), std::move(modelHash)); }
 
     // getters
     [[nodiscard]] auto              provider () const -> const OllamaProvider * override { return m_provider.get(); }

@@ -15,6 +15,7 @@
 #include <expected>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -65,13 +66,13 @@ public:
 protected:
     auto reload() -> DataStoreResult<>;
     virtual auto clear() -> DataStoreResult<> = 0;
-    struct InsertResult { bool unique; QUuid uuid; };
-    virtual InsertResult insert(const boost::json::value &jv) = 0;
+    struct CacheInsertResult { bool unique; QUuid uuid; };
+    virtual CacheInsertResult cacheInsert(const boost::json::value &jv) = 0;
 
     // helpers
     auto getFilePath(const QString &name) -> std::filesystem::path;
     auto openNew(const QString &name) -> DataStoreResult<std::unique_ptr<QFile>>;
-    auto openExisting(const QString &name) -> DataStoreResult<std::unique_ptr<QSaveFile>>;
+    auto openExisting(const QString &name, bool allowCreate = false) -> DataStoreResult<std::unique_ptr<QSaveFile>>;
     static auto read(QFileDevice &file, boost::json::stream_parser &parser) -> DataStoreResult<boost::json::value>;
     auto write(const boost::json::value &value, QFileDevice &file) -> DataStoreResult<>;
 
@@ -94,23 +95,26 @@ public:
 
     auto list() -> tl::generator<const T &>;
     auto setData(T data) -> DataStoreResult<>;
+    auto createOrSetData(T data, const QString &name) -> DataStoreResult<>;
     auto remove(const QUuid &id) -> DataStoreResult<>;
 
-    auto acquire(QUuid        id) -> DataStoreResult<const T *>;
+    auto acquire(QUuid        id) -> DataStoreResult<std::optional<const T *>>;
     auto release(const QUuid &id) -> DataStoreResult<>;
 
-    [[nodiscard]]
-    auto operator[](const QUuid &id) const -> const T &
+    [[nodiscard]] auto operator[](const QUuid &id) const -> const T &
     { return m_entries.at(id); }
+    [[nodiscard]] auto find(const QUuid &id) const -> std::optional<const T *>
+    { auto it = m_entries.find(id); return it == m_entries.end() ? std::nullopt : std::optional(&*it); }
 
 protected:
     auto createImpl(T data, const QString &name) -> DataStoreResult<const T *>;
     auto clear() -> DataStoreResult<> final;
-    InsertResult insert(const boost::json::value &jv) override;
+    CacheInsertResult cacheInsert(const boost::json::value &jv) override;
 
 private:
-    std::unordered_map<QUuid, T> m_entries;
-    std::unordered_set<QUuid>    m_acquired;
+    std::unordered_map<QUuid, T>       m_entries;
+    std::unordered_set<QUuid>          m_acquired;
+    std::unordered_map<QUuid, QString> m_names;
 };
 
 

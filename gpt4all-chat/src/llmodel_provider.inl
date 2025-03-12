@@ -13,9 +13,9 @@ void GenerationParams::tryParseValue(this S &self, QMap<GenerationParam, QVarian
 }
 
 template <typename T, typename S, typename C>
-void ModelProviderCustom::setMemberProp(this S &self, T C::* member, std::string_view name, T value)
+void ModelProviderMutable::setMemberProp(this S &self, T C::* member, std::string_view name, T value)
 {
-    auto &mpc = static_cast<ModelProviderCustom &>(self);
+    auto &mpc = static_cast<ModelProviderMutable &>(self);
     auto &cur = self.*member;
     if (cur != value) {
         cur = std::move(value);

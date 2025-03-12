@@ -51,8 +51,12 @@ auto DataStore<T>::createImpl(T data, const QString &name) -> DataStoreResult<co
 template <typename T>
 auto DataStore<T>::setData(T data) -> DataStoreResult<>
 {
+    auto name_it = m_names.find(data.id);
+    if (name_it == m_names.end())
+        return std::unexpected(QStringLiteral("id not found: %1").arg(data.id.toString()));
+
     // acquire path
-    auto file = openExisting(data.name);
+    auto file = openExisting(name_it->second);
     if (!file)
         return std::unexpected(file.error());
 
@@ -64,6 +68,32 @@ auto DataStore<T>::setData(T data) -> DataStoreResult<>
 
     // update
     m_entries.at(data.id) = std::move(data);
+    return {};
+}
+
+template <typename T>
+auto DataStore<T>::createOrSetData(T data, const QString &name) -> DataStoreResult<>
+{
+    auto name_it = m_names.find(data.id);
+    if (name_it != m_names.end() && name_it->second != name)
+        return std::unexpected(QStringLiteral("name conflict for id %1: old=%2, new=%3")
+                               .arg(data.id.toString(), name_it->second, name));
+
+    // acquire path
+    auto file = openExisting(name, /*allowCreate*/ true);
+    if (!file)
+        return std::unexpected(file.error());
+
+    // serialize
+    if (auto res = write(boost::json::value_from(data), **file); !res)
+        return std::unexpected(res.error());
+    if (!(*file)->commit())
+        return std::unexpected(file->get());
+
+    // update
+    m_entries[data.id] = std::move(data);
+    if (name_it == m_names.end())
+        m_names.emplace(data.id, name);
     return {};
 }
 
@@ -89,12 +119,12 @@ auto DataStore<T>::remove(const QUuid &id) -> DataStoreResult<>
 }
 
 template <typename T>
-auto DataStore<T>::acquire(QUuid id) -> DataStoreResult<const T *>
+auto DataStore<T>::acquire(QUuid id) -> DataStoreResult<std::optional<const T *>>
 {
     auto [it, unique] = m_acquired.insert(std::move(id));
     if (!unique)
         return std::unexpected(QStringLiteral("id already acquired: %1").arg(id.toString()));
-    return &(*this)[*it];
+    return find(*it);
 }
 
 template <typename T>
@@ -115,14 +145,13 @@ auto DataStore<T>::clear() -> DataStoreResult<>
 }
 
 template <typename T>
-auto DataStore<T>::insert(const boost::json::value &jv) -> InsertResult
+auto DataStore<T>::cacheInsert(const boost::json::value &jv) -> CacheInsertResult
 {
     auto data = boost::json::value_to<T>(jv);
     auto id = data.id;
     auto [_, ok] = m_entries.emplace(id, std::move(data));
     return { ok, std::move(id) };
 }
-
 
 
 } // namespace gpt4all::ui

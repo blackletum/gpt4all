@@ -34,14 +34,17 @@ auto OllamaProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> 
 { return new OllamaGenerationParams(values); }
 
 /// load
-OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id)
-    : ModelProvider(std::move(id))
+OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id, QString name, QUrl baseUrl)
+    : ModelProvider      (std::move(id), std::move(name), std::move(baseUrl))
     , ModelProviderCustom(std::move(store))
-{ load(); }
+{
+    if (auto res = m_store->acquire(m_id); !res)
+        res.error().raise();
+}
 
 /// create
 OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store, QString name, QUrl baseUrl)
-    : ModelProvider(std::move(name), std::move(baseUrl))
+    : ModelProvider      (std::move(name), std::move(baseUrl))
     , ModelProviderCustom(std::move(store))
 {
     auto data = m_store->create(m_name, m_baseUrl);
@@ -50,8 +53,20 @@ OllamaProviderCustom::OllamaProviderCustom(std::shared_ptr<ProviderStore> store,
     m_id = (*data)->id;
 }
 
-OllamaModelDescription::OllamaModelDescription(std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash)
-    : m_provider(std::move(provider))
+auto OllamaProviderCustom::asData() -> ModelProviderData
+{
+    return {
+        .id               = m_id,
+        .builtin          = false,
+        .type             = ProviderType::ollama,
+        .custom_details   = CustomProviderDetails { m_name, m_baseUrl },
+        .provider_details = {},
+    };
+}
+
+OllamaModelDescription::OllamaModelDescription(protected_t, std::shared_ptr<const OllamaProvider> provider,
+                                               QByteArray modelHash)
+    : m_provider (std::move(provider ))
     , m_modelHash(std::move(modelHash))
     {}
 
@@ -63,7 +78,7 @@ auto OllamaModelDescription::newInstanceImpl(QNetworkAccessManager *nam) const -
 
 OllamaChatModel::OllamaChatModel(std::shared_ptr<const OllamaModelDescription> description, QNetworkAccessManager *nam)
     : m_description(std::move(description))
-    , m_nam(nam)
+    , m_nam        (nam                   )
     {}
 
 auto OllamaChatModel::preload() -> QCoro::Task<>

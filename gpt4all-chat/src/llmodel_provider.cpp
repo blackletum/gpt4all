@@ -1,5 +1,8 @@
 #include "llmodel_provider.h"
 
+#include "llmodel_ollama.h"
+#include "llmodel_openai.h"
+
 #include "mysettings.h"
 
 #include <fmt/format.h>
@@ -42,67 +45,97 @@ QVariant GenerationParams::tryParseValue(QMap<GenerationParam, QVariant> &values
 
 ModelProvider::~ModelProvider() noexcept = default;
 
-ModelProviderCustom::~ModelProviderCustom() noexcept
+ModelProviderMutable::~ModelProviderMutable() noexcept
 {
     if (auto res = m_store->release(m_id); !res)
         res.error().raise(); // should not happen - will terminate program
 }
 
-auto ModelProviderCustom::load() -> const ModelProviderData::Details &
-{
-    auto data = m_store->acquire(m_id);
-    if (!data)
-        data.error().raise();
-    m_name    = (*data)->name;
-    m_baseUrl = (*data)->base_url;
-    return (*data)->details;
-}
-
-ProviderRegistry::ProviderRegistry(fs::path path)
-    : m_store(std::move(path))
+ProviderRegistry::ProviderRegistry(PathSet paths)
+    : m_customStore (std::move(paths.custom ))
+    , m_builtinStore(std::move(paths.builtin))
 {
     auto *mysettings = MySettings::globalInstance();
     connect(mysettings, &MySettings::modelPathChanged, this, &ProviderRegistry::onModelPathChanged);
+    load();
 }
 
-Q_INVOKABLE void ProviderRegistry::registerBuiltinProvider(ModelProviderBuiltin *provider)
+void ProviderRegistry::load()
 {
-    auto [_, unique] = m_providers.emplace(provider->id(), provider->asQObject());
-    if (!unique)
-        qWarning() << "ignoring duplicate provider:" << provider->id();
+    for (auto &p : s_builtinProviders) { // (not all builtin providers are stored)
+        auto provider = std::make_shared<OpenaiProviderBuiltin>(m_builtinStore, p.id, p.name, p.base_url);
+        auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
+        if (!unique)
+            throw std::logic_error(fmt::format("duplicate builtin provider id: {}", p.id));
+    }
+    for (auto &p : m_customStore.list()) { // disk is source of truth for custom providers
+        if (!p.custom_details) {
+            qWarning() << "ignoring builtin provider in custom store:" << p.id;
+            continue;
+        }
+        auto &cust = *p.custom_details;
+        std::shared_ptr<ModelProviderCustom> provider;
+        switch (p.type) {
+            using enum ProviderType;
+        case ollama:
+            provider = std::make_shared<OllamaProviderCustom>(
+                &m_customStore, p.id, cust.name, cust.base_url
+            );
+        case openai:
+            provider = std::make_shared<OpenaiProviderCustom>(
+                &m_customStore, p.id, cust.name, cust.base_url, p.openai_details.value().api_key
+            );
+        }
+        auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
+        if (!unique)
+            qWarning() << "ignoring duplicate custom provider with id:" << p.id;
+    }
 }
 
 [[nodiscard]]
-bool ProviderRegistry::registerCustomProvider(std::unique_ptr<ModelProviderCustom> provider)
+bool ProviderRegistry::add(std::unique_ptr<ModelProviderCustom> provider)
 {
-    auto [_, unique] = m_providers.emplace(provider->id(), provider->asQObject());
+    auto [it, unique] = m_providers.emplace(provider->id(), std::move(provider));
     if (unique) {
-        m_customProviders.push_back(std::move(provider));
+        m_customProviders.push_back(std::make_unique<QUuid>(it->first));
         emit customProviderAdded(m_customProviders.size() - 1);
     }
     return unique;
 }
 
-fs::path ProviderRegistry::getSubdir()
+auto ProviderRegistry::customProviderAt(size_t i) const -> const ModelProviderCustom *
+{
+    auto it = m_providers.find(*m_customProviders.at(i));
+    Q_ASSERT(it != m_providers.end());
+    return &dynamic_cast<ModelProviderCustom &>(*it->second);
+}
+
+auto ProviderRegistry::getSubdirs() -> PathSet
 {
     auto *mysettings = MySettings::globalInstance();
-    return toFSPath(mysettings->modelPath()) / "providers";
+    auto parent = toFSPath(mysettings->modelPath()) / "providers";
+    return { .builtin = parent, .custom  = parent / "custom" };
 }
 
 void ProviderRegistry::onModelPathChanged()
 {
-    auto path = getSubdir();
-    if (path != m_store.path()) {
+    auto paths = getSubdirs();
+    if (paths.builtin != m_builtinStore.path()) {
         emit aboutToBeCleared();
-        m_customProviders.clear(); // delete custom providers to release store locks
-        if (auto res = m_store.setPath(path); !res)
+        // delete providers to release store locks
+        m_customProviders.clear();
+        m_providers.clear();
+        if (auto res = m_builtinStore.setPath(paths.builtin); !res)
             res.error().raise(); // should not happen
+        if (auto res = m_customStore.setPath(paths.custom); !res)
+            res.error().raise(); // should not happen
+        load();
     }
 }
 
 CustomProviderList::CustomProviderList(QPointer<ProviderRegistry> registry)
-    : m_registry(std::move(registry))
-    , m_size(m_registry->customProviderCount())
+    : m_registry(std::move(registry)              )
+    , m_size    (m_registry->customProviderCount())
 {
     connect(m_registry, &ProviderRegistry::customProviderAdded, this, &CustomProviderList::onCustomProviderAdded);
     connect(m_registry, &ProviderRegistry::aboutToBeCleared, this, &CustomProviderList::onAboutToBeCleared,

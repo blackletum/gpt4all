@@ -96,23 +96,38 @@ auto OpenaiProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> 
     -> OpenaiGenerationParams *
 { return new OpenaiGenerationParams(values); }
 
-OpenaiProviderBuiltin::OpenaiProviderBuiltin(QUuid id, QString name, QUrl baseUrl, QString apiKey)
+OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl baseUrl)
     : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
-    , OpenaiProvider(std::move(apiKey))
-    {}
-
-/// load
-OpenaiProviderCustom::OpenaiProviderCustom(std::shared_ptr<ProviderStore> store, QUuid id)
-    : ModelProvider(std::move(id))
-    , ModelProviderCustom(std::move(store))
+    , ModelProviderMutable(store)
 {
-    auto &details = load();
-    m_apiKey = std::get<OpenaiProviderDetails>(details).api_key;
+    auto res = m_store->acquire(m_id);
+    if (!res)
+        res.error().raise();
+    if (auto maybeData = *res) {
+        auto &details = (*maybeData)->openai_details.value();
+        m_apiKey = details.api_key;
+    }
 }
 
+auto OpenaiProviderBuiltin::asData() -> ModelProviderData
+{
+    return {
+        .id             = m_id,
+        .type           = ProviderType::openai,
+        .custom_details = {},
+        .openai_details = OpenaiProviderDetails { m_apiKey },
+    };
+}
+
+/// load
+OpenaiProviderCustom::OpenaiProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl, QString apiKey)
+    : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
+    , OpenaiProvider(std::move(apiKey))
+    , ModelProviderCustom(store)
+    {}
+
 /// create
-OpenaiProviderCustom::OpenaiProviderCustom(std::shared_ptr<ProviderStore> store, QString name, QUrl baseUrl,
-                                           QString apiKey)
+OpenaiProviderCustom::OpenaiProviderCustom(ProviderStore *store, QString name, QUrl baseUrl, QString apiKey)
     : ModelProvider(std::move(name), std::move(baseUrl))
     , ModelProviderCustom(std::move(store))
     , OpenaiProvider(std::move(apiKey))
@@ -123,8 +138,19 @@ OpenaiProviderCustom::OpenaiProviderCustom(std::shared_ptr<ProviderStore> store,
     m_id = (*data)->id;
 }
 
-OpenaiModelDescription::OpenaiModelDescription(std::shared_ptr<const OpenaiProvider> provider, QString modelName)
-    : m_provider(std::move(provider))
+auto OpenaiProviderCustom::asData() -> ModelProviderData
+{
+    return {
+        .id             = m_id,
+        .type           = ProviderType::openai,
+        .custom_details = CustomProviderDetails { m_name, m_baseUrl },
+        .openai_details = OpenaiProviderDetails { m_apiKey          },
+    };
+}
+
+OpenaiModelDescription::OpenaiModelDescription(protected_t, std::shared_ptr<const OpenaiProvider> provider,
+                                               QString modelName)
+    : m_provider (std::move(provider ))
     , m_modelName(std::move(modelName))
     {}
 

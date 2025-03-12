@@ -245,6 +245,7 @@ qt_add_executable(chat
     src/llmodel_ollama.cpp        src/llmodel_ollama.h
     src/llmodel_openai.cpp        src/llmodel_openai.h
     src/llmodel_provider.cpp      src/llmodel_provider.h
+    src/llmodel_provider_builtins.cpp
     src/localdocs.cpp             src/localdocs.h
     src/localdocsmodel.cpp        src/localdocsmodel.h
     src/logger.cpp                src/logger.h

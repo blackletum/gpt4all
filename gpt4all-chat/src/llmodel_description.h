@@ -15,11 +15,13 @@ namespace gpt4all::ui {
 
 class ChatLLMInstance;
 
-// TODO: implement shared_from_this guidance for restricted construction
 class ModelDescription : public std::enable_shared_from_this<ModelDescription> {
     Q_GADGET
     Q_PROPERTY(const ModelProvider *provider READ provider CONSTANT)
     Q_PROPERTY(QVariant             key      READ key      CONSTANT)
+
+protected:
+    struct protected_t { explicit protected_t() = default; };
 
 public:
     virtual ~ModelDescription() noexcept = 0;

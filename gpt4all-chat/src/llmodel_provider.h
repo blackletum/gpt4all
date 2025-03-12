@@ -14,6 +14,7 @@
 #include <QUuid>
 #include <QtPreprocessorSupport>
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -63,9 +64,7 @@ class ModelProvider {
     Q_PROPERTY(QUuid id READ id CONSTANT)
 
 protected:
-    explicit ModelProvider(QUuid id) // load
-        : m_id(std::move(id)) {}
-    explicit ModelProvider(QUuid id, QString name, QUrl baseUrl) // create built-in
+    explicit ModelProvider(QUuid id, QString name, QUrl baseUrl) // create built-in or load
         : m_id(std::move(id)), m_name(std::move(name)), m_baseUrl(std::move(baseUrl)) {}
     explicit ModelProvider(QString name, QUrl baseUrl) // create custom
         : m_name(std::move(name)), m_baseUrl(std::move(baseUrl)) {}
@@ -93,36 +92,39 @@ protected:
     QUrl    m_baseUrl;
 };
 
-class ModelProviderBuiltin : public virtual ModelProvider {
+// Mixin with no public interface providing basic load/save
+class ModelProviderMutable : public virtual ModelProvider {
     Q_GADGET
-    Q_PROPERTY(QString name    READ name    CONSTANT)
-    Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
-};
-
-class ModelProviderCustom : public virtual ModelProvider {
-    Q_GADGET
-    Q_PROPERTY(QString name    READ name    WRITE setName    NOTIFY nameChanged   )
-    Q_PROPERTY(QUrl    baseUrl READ baseUrl WRITE setBaseUrl NOTIFY baseUrlChanged)
 
 protected:
-    explicit ModelProviderCustom(std::shared_ptr<ProviderStore> store)
-        : m_store(std::move(store)) {}
+    explicit ModelProviderMutable(ProviderStore *store)
+        : m_store(store) {}
 
 public:
-    ~ModelProviderCustom() noexcept override;
-
-    // setters
-    void setName   (QString value) { setMemberProp<QString>(&ModelProviderCustom::m_name,    "name",    std::move(value)); }
-    void setBaseUrl(QUrl    value) { setMemberProp<QUrl   >(&ModelProviderCustom::m_baseUrl, "baseUrl", std::move(value)); }
+    ~ModelProviderMutable() noexcept override;
 
 protected:
-    virtual auto load() -> const ModelProviderData::Details &;
     virtual auto asData() -> ModelProviderData = 0;
 
     template <typename T, typename S, typename C>
     void setMemberProp(this S &self, T C::* member, std::string_view name, T value);
 
-    std::shared_ptr<ProviderStore> m_store;
+    ProviderStore *m_store;
+};
+
+class ModelProviderCustom : public ModelProviderMutable {
+    Q_GADGET
+    Q_PROPERTY(QString name    READ name    WRITE setName    NOTIFY nameChanged   )
+    Q_PROPERTY(QUrl    baseUrl READ baseUrl WRITE setBaseUrl NOTIFY baseUrlChanged)
+
+protected:
+    explicit ModelProviderCustom(ProviderStore *store)
+        : ModelProviderMutable(store) {}
+
+public:
+    // setters
+    void setName   (QString value) { setMemberProp<QString>(&ModelProviderCustom::m_name,    "name",    std::move(value)); }
+    void setBaseUrl(QUrl    value) { setMemberProp<QUrl   >(&ModelProviderCustom::m_baseUrl, "baseUrl", std::move(value)); }
 };
 
 class ProviderRegistry : public QObject {
@@ -130,18 +132,26 @@ class ProviderRegistry : public QObject {
     QML_ELEMENT
     QML_SINGLETON
 
+private:
+    struct PathSet { std::filesystem::path builtin, custom; };
+
+    struct BuiltinProviderData {
+        QUuid   id;
+        QString name;
+        QUrl    base_url;
+    };
+
 protected:
-    explicit ProviderRegistry(std::filesystem::path path);
+    explicit ProviderRegistry(PathSet paths);
 
 public:
-    static ProviderRegistry *create(QQmlEngine *, QJSEngine *) { return new ProviderRegistry(getSubdir()); }
-    Q_INVOKABLE   void registerBuiltinProvider(ModelProviderBuiltin *provider);
-    [[nodiscard]] bool registerCustomProvider (std::unique_ptr<ModelProviderCustom> provider);
+    static ProviderRegistry *create(QQmlEngine *, QJSEngine *) { return new ProviderRegistry(getSubdirs()); }
+    [[nodiscard]] bool add(std::unique_ptr<ModelProviderCustom> provider);
 
-    size_t customProviderCount() const
+    // TODO(jared): implement a way to remove custom providers via the model
+    [[nodiscard]] size_t customProviderCount() const
     { return m_customProviders.size(); }
-    auto customProviderAt(size_t i) const -> const ModelProviderCustom *
-    { return m_customProviders.at(i).get(); }
+    [[nodiscard]] auto customProviderAt(size_t i) const -> const ModelProviderCustom *;
     auto operator[](const QUuid &id) -> ModelProviderCustom *
     { return &dynamic_cast<ModelProviderCustom &>(*m_providers.at(id)); }
 
@@ -150,20 +160,24 @@ Q_SIGNALS:
     void aboutToBeCleared();
 
 private:
-    static auto getSubdir() -> std::filesystem::path;
+    void load();
+    static PathSet getSubdirs();
 
 private Q_SLOTS:
     void onModelPathChanged();
 
 private:
-    ProviderStore                                     m_store;
-    std::unordered_map<QUuid, QPointer<QObject>>      m_providers;
-    std::vector<std::unique_ptr<ModelProviderCustom>> m_customProviders;
+    static constexpr size_t N_BUILTIN = 3;
+    static const std::array<BuiltinProviderData, N_BUILTIN> s_builtinProviders;
+
+    ProviderStore                                             m_customStore;
+    ProviderStore                                             m_builtinStore;
+    std::unordered_map<QUuid, std::shared_ptr<ModelProvider>> m_providers;
+    std::vector<std::unique_ptr<QUuid>>                       m_customProviders;
 };
 
 class CustomProviderList : public QAbstractListModel {
     Q_OBJECT
-    QML_ELEMENT
 
 protected:
     explicit CustomProviderList(QPointer<ProviderRegistry> registry);

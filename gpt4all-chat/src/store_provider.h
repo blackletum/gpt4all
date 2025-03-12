@@ -4,33 +4,43 @@
 
 #include <boost/describe/class.hpp>
 #include <boost/describe/enum.hpp>
+#include <boost/json.hpp> // IWYU pragma: keep
 
 #include <QString>
 #include <QUrl>
 #include <QUuid>
 
-#include <variant>
-
 
 namespace gpt4all::ui {
 
 
-BOOST_DEFINE_ENUM_CLASS(ProviderType, openai, ollama)
+// indices of this enum should be consistent with indices of ProviderDetails
+enum class ProviderType {
+    openai = 0,
+    ollama = 1,
+};
+BOOST_DESCRIBE_ENUM(ProviderType, openai, ollama)
+
+struct CustomProviderDetails {
+    QString name;
+    QUrl    base_url;
+};
 
 struct OpenaiProviderDetails {
     QString api_key;
 };
-BOOST_DESCRIBE_STRUCT(OpenaiProviderDetails, (), (api_key))
 
 struct ModelProviderData {
-    using Details = std::variant<std::monostate, OpenaiProviderDetails>;
-    QUuid        id;
-    ProviderType type;
-    QString      name;
-    QUrl         base_url;
-    Details      details;
+    using ProviderDetails = std::variant<OpenaiProviderDetails, std::monostate>;
+    QUuid                                id;
+    std::optional<CustomProviderDetails> custom_details;
+    ProviderDetails                      provider_details;
+
+    ProviderType type() const { return ProviderType(provider_details.index()); }
 };
-BOOST_DESCRIBE_STRUCT(ModelProviderData, (), (id, type, name, base_url, details))
+void tag_invoke(const boost::json::value_from_tag &, boost::json::value &jv, ModelProviderData data);
+auto tag_invoke(const boost::json::value_to_tag<ModelProviderData> &, const boost::json::value &jv)
+    -> ModelProviderData;
 
 class ProviderStore : public DataStore<ModelProviderData> {
 private:

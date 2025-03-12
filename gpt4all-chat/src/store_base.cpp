@@ -73,7 +73,7 @@ auto DataStoreBase::reload() -> DataStoreResult<>
         if (!jv) {
             (qWarning().nospace() << "skipping " << file.fileName() << "because of read error: ").noquote()
                 << jv.error().errorString();
-        } else if (auto [unique, uuid] = insert(*jv); !unique)
+        } else if (auto [unique, uuid] = cacheInsert(*jv); !unique)
             qWarning() << "skipping duplicate data store entry:" << uuid;
         file.close();
     }
@@ -103,7 +103,7 @@ auto DataStoreBase::openNew(const QString &name) -> DataStoreResult<std::unique_
     return file;
 }
 
-auto DataStoreBase::openExisting(const QString &name) -> DataStoreResult<std::unique_ptr<QSaveFile>>
+auto DataStoreBase::openExisting(const QString &name, bool allowCreate) -> DataStoreResult<std::unique_ptr<QSaveFile>>
 {
     auto path = getFilePath(name);
     if (!QFile::exists(path))
@@ -111,7 +111,10 @@ auto DataStoreBase::openExisting(const QString &name) -> DataStoreResult<std::un
             std::make_error_code(std::errc::no_such_file_or_directory), path.string()
         ));
     auto file = std::make_unique<QSaveFile>(toQString(path));
-    if (!file->open(QSaveFile::WriteOnly | QSaveFile::ExistingOnly))
+    QFile::OpenMode flags = QSaveFile::WriteOnly;
+    if (!allowCreate)
+        flags |= QSaveFile::ExistingOnly;
+    if (!file->open(flags))
         return std::unexpected(&*file);
     return file;
 }

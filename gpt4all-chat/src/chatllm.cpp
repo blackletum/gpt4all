@@ -330,10 +330,8 @@ void ChatLLM::trySwitchContextOfLoadedModel(const ModelInfo &modelInfo)
     emit trySwitchContextOfLoadedModelCompleted(0);
 }
 
-// TODO: always call with a resource guard held since this didn't previously use coroutines
 auto ChatLLM::loadModel(const ModelInfo &modelInfo) -> QCoro::Task<bool>
 {
-    // TODO: get the description from somewhere
     bool alreadyAcquired = isModelLoaded();
     if (alreadyAcquired && *modelInfo.modelDesc() == *m_modelInfo.modelDesc()) {
         // already acquired -> keep it
