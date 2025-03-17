@@ -546,8 +546,6 @@ public:
 
     Q_INVOKABLE void discoverSearch(const QString &discover);
 
-    Q_INVOKABLE QStringList remoteModelList(const QString &apiKey, const QUrl &baseUrl);
-
 Q_SIGNALS:
     void countChanged();
     void installedModelsChanged();

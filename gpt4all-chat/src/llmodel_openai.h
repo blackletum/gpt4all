@@ -4,9 +4,13 @@
 #include "llmodel_description.h"
 #include "llmodel_provider.h"
 
+#include <QCoro/QCoroQmlTask> // IWYU pragma: keep
+#include <gpt4all-backend/ollama-client.h>
+
 #include <QLatin1StringView> // IWYU pragma: keep
 #include <QObject> // IWYU pragma: keep
 #include <QString>
+#include <QStringList> // IWYU pragma: keep
 #include <QUrl>
 #include <QVariant>
 #include <QtTypes> // IWYU pragma: keep
@@ -17,6 +21,7 @@
 class QNetworkAccessManager;
 template <typename Key, typename T> class QMap;
 template <typename T> class QSet;
+namespace QCoro { template <typename T> class Task; }
 
 
 namespace gpt4all::ui {
@@ -42,7 +47,8 @@ protected:
 
 class OpenaiProvider : public QObject, public virtual ModelProvider {
     Q_OBJECT
-    Q_PROPERTY(QString apiKey READ apiKey WRITE setApiKey NOTIFY apiKeyChanged)
+    Q_PROPERTY(QUuid   id     READ id     CONSTANT            )
+    Q_PROPERTY(QString apiKey READ apiKey NOTIFY apiKeyChanged)
 
 protected:
     explicit OpenaiProvider() = default;
@@ -57,10 +63,14 @@ public:
 
     [[nodiscard]] const QString &apiKey() const { return m_apiKey; }
 
-    virtual void setApiKey(QString value) = 0;
+    [[nodiscard]] virtual DataStoreResult<> setApiKey(QString value) = 0;
+    Q_INVOKABLE bool setApiKeyQml(QString value);
 
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OpenaiGenerationParams * override;
+
+    auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>>;
+    Q_INVOKABLE QCoro::QmlTask listModelsQml();
 
 Q_SIGNALS:
     void apiKeyChanged(const QString &value);
@@ -69,23 +79,33 @@ protected:
     QString m_apiKey;
 };
 
-class OpenaiProviderBuiltin : public OpenaiProvider, public ModelProviderMutable {
+class OpenaiProviderBuiltin : public OpenaiProvider, public ModelProviderBuiltin, public ModelProviderMutable {
     Q_OBJECT
-    Q_PROPERTY(QString name    READ name    CONSTANT)
-    Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
+    Q_PROPERTY(QString     name           READ name           CONSTANT)
+    Q_PROPERTY(QUrl        icon           READ icon           CONSTANT)
+    Q_PROPERTY(QUrl        baseUrl        READ baseUrl        CONSTANT)
+    Q_PROPERTY(QStringList modelWhitelist READ modelWhitelist CONSTANT)
 
 public:
     /// Create a new built-in OpenAI provider, loading its API key from disk if known.
-    explicit OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl baseUrl);
+    explicit OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl icon, QUrl baseUrl,
+                                   QStringList modelWhitelist);
 
-    void setApiKey(QString value) override { setMemberProp<QString>(&OpenaiProviderBuiltin::m_apiKey, "apiKey", std::move(value)); }
+    [[nodiscard]] const QStringList &modelWhitelist() { return m_modelWhitelist; }
+
+    [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
+    { return setMemberProp<QString>(&OpenaiProviderBuiltin::m_apiKey, "apiKey", std::move(value), /*createName*/ m_name); }
 
 protected:
     auto asData() -> ModelProviderData override;
+
+    QStringList m_modelWhitelist;
 };
 
 class OpenaiProviderCustom final : public OpenaiProvider, public ModelProviderCustom {
     Q_OBJECT
+    Q_PROPERTY(QString name    READ name    NOTIFY nameChanged   )
+    Q_PROPERTY(QUrl    baseUrl READ baseUrl NOTIFY baseUrlChanged)
 
 public:
     /// Load an existing OpenaiProvider from disk.
@@ -94,7 +114,8 @@ public:
     /// Create a new OpenaiProvider on disk.
     explicit OpenaiProviderCustom(ProviderStore *store, QString name, QUrl baseUrl, QString apiKey);
 
-    void setApiKey(QString value) override { setMemberProp<QString>(&OpenaiProviderCustom::m_apiKey, "apiKey", std::move(value)); }
+    [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
+    { return setMemberProp<QString>(&OpenaiProviderCustom::m_apiKey, "apiKey", std::move(value)); }
 
 Q_SIGNALS:
     void nameChanged   (const QString &value);

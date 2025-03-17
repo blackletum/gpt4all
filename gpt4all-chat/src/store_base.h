@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -31,13 +32,15 @@ namespace gpt4all::ui {
 class DataStoreError {
 public:
     using ErrorCode = std::variant<
-        QFileDevice::FileError,
+        std::monostate,
+        std::error_code,
         boost::system::error_code,
-        std::monostate
+        QFileDevice::FileError
     >;
 
-    DataStoreError(const QFileDevice *file);
+    DataStoreError(std::error_code e);
     DataStoreError(const boost::system::system_error &e);
+    DataStoreError(const QFileDevice *file);
     DataStoreError(QString e);
 
     [[nodiscard]] const ErrorCode &error      () const { return m_error;       }
@@ -94,8 +97,7 @@ public:
     explicit DataStore(std::filesystem::path path);
 
     auto list() -> tl::generator<const T &>;
-    auto setData(T data) -> DataStoreResult<>;
-    auto createOrSetData(T data, const QString &name) -> DataStoreResult<>;
+    auto setData(T data, std::optional<QString> createName = {}) -> DataStoreResult<>;
     auto remove(const QUuid &id) -> DataStoreResult<>;
 
     auto acquire(QUuid        id) -> DataStoreResult<std::optional<const T *>>;

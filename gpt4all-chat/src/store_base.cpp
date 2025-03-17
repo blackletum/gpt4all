@@ -26,18 +26,23 @@ using namespace Qt::StringLiterals;
 namespace gpt4all::ui {
 
 
+DataStoreError::DataStoreError(std::error_code e)
+    : m_error(e)
+    , m_errorString(QString::fromStdString(e.message()))
+    {}
+
+DataStoreError::DataStoreError(const sys::system_error &e)
+    : m_error(e.code())
+    , m_errorString(QString::fromUtf8(e.what()))
+{
+    Q_ASSERT(e.code());
+}
+
 DataStoreError::DataStoreError(const QFileDevice *file)
     : m_error(file->error())
     , m_errorString(file->errorString())
 {
     Q_ASSERT(file->error());
-}
-
-DataStoreError::DataStoreError(const boost::system::system_error &e)
-    : m_error(e.code())
-    , m_errorString(QString::fromUtf8(e.what()))
-{
-    Q_ASSERT(e.code());
 }
 
 DataStoreError::DataStoreError(QString e)
@@ -48,9 +53,10 @@ DataStoreError::DataStoreError(QString e)
 void DataStoreError::raise() const
 {
     std::visit(Overloaded {
-        [&](QFileDevice::FileError    e) { throw FileError(m_errorString, e); },
-        [&](boost::system::error_code e) { throw std::runtime_error(m_errorString.toUtf8().constData()); },
-        [&](std::monostate             ) { throw std::runtime_error(m_errorString.toUtf8().constData()); },
+        [&](std::error_code        e) { throw std::system_error(e);                                   },
+        [&](sys::error_code        e) { throw std::runtime_error(m_errorString.toUtf8().constData()); },
+        [&](QFileDevice::FileError e) { throw FileError(m_errorString, e);                            },
+        [&](std::monostate          ) { throw std::runtime_error(m_errorString.toUtf8().constData()); },
     }, m_error);
     Q_UNREACHABLE();
 }
@@ -63,7 +69,20 @@ auto DataStoreBase::reload() -> DataStoreResult<>
     json::stream_parser parser;
     QFile file;
 
-    for (auto &entry : fs::directory_iterator(m_path)) {
+    fs::directory_iterator it;
+    try {
+        it = fs::directory_iterator(m_path);
+    } catch (const fs::filesystem_error &e) {
+        if (e.code() == std::errc::no_such_file_or_directory) {
+            fs::create_directories(m_path);
+            return {}; // brand new dir, nothing to load
+        }
+        throw;
+    }
+
+    for (auto &entry : it) {
+        if (!entry.is_regular_file())
+            continue; // skip directories and such
         file.setFileName(entry.path());
         if (!file.open(QFile::ReadOnly)) {
             qWarning().noquote() << "skipping unopenable file:" << file.fileName();
@@ -71,7 +90,7 @@ auto DataStoreBase::reload() -> DataStoreResult<>
         }
         auto jv = read(file, parser);
         if (!jv) {
-            (qWarning().nospace() << "skipping " << file.fileName() << "because of read error: ").noquote()
+            (qWarning().nospace() << "skipping " << file.fileName() << " because of read error: ").noquote()
                 << jv.error().errorString();
         } else if (auto [unique, uuid] = cacheInsert(*jv); !unique)
             qWarning() << "skipping duplicate data store entry:" << uuid;
@@ -89,7 +108,7 @@ auto DataStoreBase::setPath(fs::path path) -> DataStoreResult<>
     return {};
 }
 
-auto DataStoreBase::getFilePath(const QString &name) -> std::filesystem::path
+auto DataStoreBase::getFilePath(const QString &name) -> fs::path
 { return m_path / fmt::format("{}.json", QLatin1StringView(normalizeName(name))); }
 
 auto DataStoreBase::openNew(const QString &name) -> DataStoreResult<std::unique_ptr<QFile>>
@@ -106,7 +125,7 @@ auto DataStoreBase::openNew(const QString &name) -> DataStoreResult<std::unique_
 auto DataStoreBase::openExisting(const QString &name, bool allowCreate) -> DataStoreResult<std::unique_ptr<QSaveFile>>
 {
     auto path = getFilePath(name);
-    if (!QFile::exists(path))
+    if (!allowCreate && !QFile::exists(path))
         return std::unexpected(sys::system_error(
             std::make_error_code(std::errc::no_such_file_or_directory), path.string()
         ));
@@ -119,32 +138,80 @@ auto DataStoreBase::openExisting(const QString &name, bool allowCreate) -> DataS
     return file;
 }
 
-auto DataStoreBase::read(QFileDevice &file, boost::json::stream_parser &parser) -> DataStoreResult<boost::json::value>
+auto DataStoreBase::read(QFileDevice &file, json::stream_parser &parser) -> DataStoreResult<json::value>
 {
-    for (;;) {
-        auto chunk = file.read(JSON_BUFSIZ);
-        if (file.error())
-            return std::unexpected(&file);
-        if (chunk.isEmpty()) {
-            Q_ASSERT(file.atEnd());
-            break;
+    // chunk stream
+    auto iterChunks = [&] -> tl::generator<DataStoreResult<QByteArray>> {
+        for (;;) {
+            auto chunk = file.read(JSON_BUFSIZ);
+            if (file.error()) {
+                DataStoreResult<QByteArray> res(std::unexpect, &file);
+                co_yield res;
+            }
+            if (chunk.isEmpty()) {
+                Q_ASSERT(file.atEnd());
+                break;
+            }
+            DataStoreResult<QByteArray> res(std::move(chunk));
+            co_yield res;
         }
-        parser.write(chunk.data(), chunk.size());
+    };
+
+    auto inner = [&] -> DataStoreResult<> {
+        bool partialRead = false;
+        auto chunkIt = iterChunks();
+        // read JSON data
+        for (auto &chunk : chunkIt) {
+            if (!chunk)
+                return std::unexpected(chunk.error());
+            size_t nRead = parser.write_some(chunk->data(), chunk->size());
+            // consume trailing whitespace in chunk
+            if (nRead < chunk->size()) {
+                auto rest = QByteArrayView(*chunk).slice(nRead);
+                if (!rest.trimmed().isEmpty())
+                    return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(QByteArray(rest)));
+                partialRead = true;
+                break;
+            }
+        }
+        // consume trailing whitespace in file
+        if (partialRead) {
+            for (auto &chunk : chunkIt) {
+                if (!chunk)
+                    return std::unexpected(chunk.error());
+                if (!chunk->trimmed().isEmpty())
+                    return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(*chunk));
+            }
+        }
+        return {};
+    };
+
+    auto res = inner();
+    if (!res) {
+        parser.reset();
+        return std::unexpected(res.error());
     }
     return parser.release();
 }
 
 auto DataStoreBase::write(const json::value &value, QFileDevice &file) -> DataStoreResult<>
 {
+    qint64 nWritten;
     m_serializer.reset(&value);
     std::array<char, JSON_BUFSIZ> buf;
     while (!m_serializer.done()) {
         auto chunk = m_serializer.read(buf.data(), buf.size());
-        qint64 nWritten = file.write(chunk.data(), chunk.size());
+        nWritten = file.write(chunk.data(), chunk.size());
         if (nWritten < 0)
             return std::unexpected(&file);
         Q_ASSERT(nWritten == chunk.size());
     }
+
+    // write trailing newline to make it a valid text file
+    nWritten = file.write("\n"_ba);
+    if (nWritten < 0)
+        return std::unexpected(&file);
+    Q_ASSERT(nWritten == 1);
 
     if (!file.flush())
         return std::unexpected(&file);

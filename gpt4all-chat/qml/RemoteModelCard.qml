@@ -18,6 +18,7 @@ import localdocs
 
 
 Rectangle {
+    required property var provider
     property alias providerName: providerNameLabel.text
     property alias providerImage: myimage.source
     property alias providerDesc: providerDescLabel.text
@@ -100,18 +101,23 @@ Rectangle {
                 Layout.fillWidth: true
                 font.pixelSize: theme.fontSizeLarge
                 wrapMode: Text.WrapAnywhere
+                echoMode: TextField.Password
                 function showError() {
                     messageToast.show(qsTr("ERROR: $API_KEY is empty."));
                     apiKeyField.placeholderTextColor = theme.textErrorColor;
                 }
+                Component.onCompleted: { text = provider.apiKey; }
                 onTextChanged: {
                     apiKeyField.placeholderTextColor = theme.mutedTextColor;
-                    if (!providerIsCustom) {
-                        let models = ModelList.remoteModelList(apiKeyField.text, providerBaseUrl);
-                        if (modelWhitelist !== null)
-                            models = models.filter(m => modelWhitelist.includes(m));
-                        myModelList.model = models;
-                        myModelList.currentIndex = -1;
+                    if (!providerIsCustom && provider.setApiKeyQml(text)) {
+                        provider.listModelsQml().then(modelList => {
+                            if (modelList !== null) {
+                                if (modelWhitelist !== null)
+                                    models = models.filter(m => modelWhitelist.includes(m));
+                                myModelList.model = models;
+                                myModelList.currentIndex = -1;
+                            }
+                        });
                     }
                 }
                 placeholderText: qsTr("enter $API_KEY")

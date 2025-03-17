@@ -6,6 +6,8 @@
 #include <QSaveFile>
 #include <QtAssert>
 
+#include <system_error>
+
 
 namespace gpt4all::ui {
 
@@ -49,38 +51,19 @@ auto DataStore<T>::createImpl(T data, const QString &name) -> DataStoreResult<co
 }
 
 template <typename T>
-auto DataStore<T>::setData(T data) -> DataStoreResult<>
+auto DataStore<T>::setData(T data, std::optional<QString> createName) -> DataStoreResult<>
 {
+    const QString *openName;
     auto name_it = m_names.find(data.id);
-    if (name_it == m_names.end())
+    if (name_it != m_names.end()) {
+        openName = &name_it->second;
+    } else if (createName) {
+        openName = &*createName;
+    } else
         return std::unexpected(QStringLiteral("id not found: %1").arg(data.id.toString()));
 
     // acquire path
-    auto file = openExisting(name_it->second);
-    if (!file)
-        return std::unexpected(file.error());
-
-    // serialize
-    if (auto res = write(boost::json::value_from(data), **file); !res)
-        return std::unexpected(res.error());
-    if (!(*file)->commit())
-        return std::unexpected(file->get());
-
-    // update
-    m_entries.at(data.id) = std::move(data);
-    return {};
-}
-
-template <typename T>
-auto DataStore<T>::createOrSetData(T data, const QString &name) -> DataStoreResult<>
-{
-    auto name_it = m_names.find(data.id);
-    if (name_it != m_names.end() && name_it->second != name)
-        return std::unexpected(QStringLiteral("name conflict for id %1: old=%2, new=%3")
-                               .arg(data.id.toString(), name_it->second, name));
-
-    // acquire path
-    auto file = openExisting(name, /*allowCreate*/ true);
+    auto file = openExisting(*openName, !!createName);
     if (!file)
         return std::unexpected(file.error());
 
@@ -92,8 +75,19 @@ auto DataStore<T>::createOrSetData(T data, const QString &name) -> DataStoreResu
 
     // update
     m_entries[data.id] = std::move(data);
-    if (name_it == m_names.end())
-        m_names.emplace(data.id, name);
+
+    // rename if necessary
+    if (name_it == m_names.end()) {
+        m_names.emplace(data.id, std::move(*createName));
+    } else if (*createName != name_it->second) {
+        std::error_code ec;
+        auto newPath = getFilePath(*createName);
+        std::filesystem::rename(getFilePath(name_it->second), newPath, ec);
+        if (ec)
+            return std::unexpected(ec);
+        m_names.at(data.id) = std::move(*createName);
+    }
+
     return {};
 }
 

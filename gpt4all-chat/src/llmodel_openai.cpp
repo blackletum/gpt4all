@@ -1,10 +1,13 @@
 #include "llmodel_openai.h"
 
+#include "main.h"
 #include "mysettings.h"
 #include "utils.h"
 
 #include <QCoro/QCoroAsyncGenerator> // IWYU pragma: keep
 #include <QCoro/QCoroNetworkReply> // IWYU pragma: keep
+#include <QCoro/QCoroTask> // IWYU pragma: keep
+#include <boost/json.hpp> // IWYU pragma: keep
 #include <fmt/format.h>
 #include <gpt4all-backend/formatters.h> // IWYU pragma: keep
 #include <gpt4all-backend/rest.h>
@@ -36,6 +39,7 @@
 #include <stdexcept>
 #include <utility>
 
+namespace json = boost::json;
 using namespace Qt::Literals::StringLiterals;
 
 //#define DEBUG
@@ -86,6 +90,14 @@ auto OpenaiGenerationParams::toMap() const -> QMap<QLatin1StringView, QVariant>
 
 OpenaiProvider::~OpenaiProvider() noexcept = default;
 
+Q_INVOKABLE bool OpenaiProvider::setApiKeyQml(QString value)
+{
+    auto res = setApiKey(std::move(value));
+    if (!res)
+        qWarning().noquote() << "setApiKey failed:" << res.error().errorString();
+    return bool(res);
+}
+
 auto OpenaiProvider::supportedGenerationParams() const -> QSet<GenerationParam>
 {
     using enum GenerationParam;
@@ -96,9 +108,61 @@ auto OpenaiProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> 
     -> OpenaiGenerationParams *
 { return new OpenaiGenerationParams(values); }
 
-OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl baseUrl)
+auto OpenaiProvider::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>>
+{
+    auto *nam = networkAccessManager();
+
+    QNetworkRequest request(m_baseUrl.resolved(u"models"_s));
+    request.setHeader   (QNetworkRequest::ContentTypeHeader, "application/json"_ba);
+    request.setRawHeader("Authorization"_ba, fmt::format("Bearer {}", m_apiKey).c_str());
+
+    std::unique_ptr<QNetworkReply> reply(nam->get(request));
+    QRestReply restReply(reply.get());
+
+    if (reply->error())
+        co_return std::unexpected(&restReply);
+
+    QStringList models;
+    try {
+        json::stream_parser parser;
+        auto coroReply = qCoro(*reply);
+        for (;;) {
+            auto chunk = co_await coroReply.readAll();
+            if (!restReply.isSuccess())
+                co_return std::unexpected(&restReply);
+            if (chunk.isEmpty()) {
+                Q_ASSERT(reply->atEnd());
+                break;
+            }
+            parser.write(chunk.data(), chunk.size());
+        }
+        parser.finish();
+        auto resp = parser.release().as_object();
+        for (auto &entry : resp.at("data").as_array())
+            models << json::value_to<QString>(entry.at("id"));
+    } catch (const boost::system::system_error &e) {
+        co_return std::unexpected(e);
+    }
+    co_return models;
+}
+
+QCoro::QmlTask OpenaiProvider::listModelsQml()
+{
+    return [this]() -> QCoro::Task<QVariant> {
+        auto result = co_await listModels();
+        if (result)
+            co_return *result;
+        qWarning().noquote() << "OpenaiProvider::listModels failed:" << result.error().errorString();
+        co_return QVariant::fromValue(nullptr);
+    }();
+}
+
+OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl icon, QUrl baseUrl,
+                                             QStringList modelWhitelist)
     : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
+    , ModelProviderBuiltin(std::move(icon))
     , ModelProviderMutable(store)
+    , m_modelWhitelist(std::move(modelWhitelist))
 {
     auto res = m_store->acquire(m_id);
     if (!res)

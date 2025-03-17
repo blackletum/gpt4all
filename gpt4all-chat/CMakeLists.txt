@@ -249,7 +249,7 @@ qt_add_executable(chat
     src/localdocs.cpp             src/localdocs.h
     src/localdocsmodel.cpp        src/localdocsmodel.h
     src/logger.cpp                src/logger.h
-    src/main.cpp
+    src/main.cpp                  src/main.h
     src/modellist.cpp             src/modellist.h
     src/mysettings.cpp            src/mysettings.h
     src/network.cpp               src/network.h
@@ -467,7 +467,7 @@ else()
 endif()
 target_link_libraries(chat PRIVATE
     Boost::describe Boost::json Boost::system
-    QCoro6::Core QCoro6::Network
+    QCoro6::Core QCoro6::Network QCoro6::Qml
     QXlsx
     SingleApplication
     duckx::duckx

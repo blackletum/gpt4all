@@ -13,17 +13,19 @@ void GenerationParams::tryParseValue(this S &self, QMap<GenerationParam, QVarian
 }
 
 template <typename T, typename S, typename C>
-void ModelProviderMutable::setMemberProp(this S &self, T C::* member, std::string_view name, T value)
+auto ModelProviderMutable::setMemberProp(this S &self, T C::* member, std::string_view name, T value,
+                                         std::optional<QString> createName) -> DataStoreResult<>
 {
     auto &mpc = static_cast<ModelProviderMutable &>(self);
     auto &cur = self.*member;
     if (cur != value) {
         cur = std::move(value);
         auto data = mpc.asData();
-        if (auto res = mpc.m_store->setData(std::move(data)); !res)
-            res.error().raise();
+        if (auto res = mpc.m_store->setData(std::move(data), createName); !res)
+            return res;
         QMetaObject::invokeMethod(self.asQObject(), fmt::format("{}Changed", name).c_str(), cur);
     }
+    return {};
 }
 
 

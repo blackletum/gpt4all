@@ -38,7 +38,8 @@ protected:
 };
 
 class OllamaProvider : public QObject, public virtual ModelProvider {
-    Q_OBJECT
+    Q_GADGET
+    Q_PROPERTY(QUuid id READ id CONSTANT)
 
 public:
     ~OllamaProvider() noexcept override = 0;
@@ -63,6 +64,8 @@ public:
 
 class OllamaProviderCustom final : public OllamaProvider, public ModelProviderCustom {
     Q_OBJECT
+    Q_PROPERTY(QString name    READ name    NOTIFY nameChanged   )
+    Q_PROPERTY(QUrl    baseUrl READ baseUrl NOTIFY baseUrlChanged)
 
 public:
     /// Load an existing OllamaProvider from disk.

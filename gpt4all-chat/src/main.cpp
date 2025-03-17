@@ -52,6 +52,9 @@
 using namespace Qt::Literals::StringLiterals;
 
 
+namespace gpt4all::ui {
+
+
 static void raiseWindow(QWindow *window)
 {
 #ifdef Q_OS_WINDOWS
@@ -70,8 +73,19 @@ static void raiseWindow(QWindow *window)
 #endif
 }
 
+Q_GLOBAL_STATIC(QNetworkAccessManager, globalNetworkAccessManager)
+
+QNetworkAccessManager *networkAccessManager()
+{ return globalNetworkAccessManager(); }
+
+
+} // namespace gpt4all::ui
+
+
 int main(int argc, char *argv[])
 {
+    using namespace gpt4all::ui;
+
 #ifndef GPT4ALL_USE_QTPDF
     FPDF_InitLibrary();
 #endif

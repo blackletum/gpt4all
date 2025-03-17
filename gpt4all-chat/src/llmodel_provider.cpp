@@ -60,13 +60,26 @@ ProviderRegistry::ProviderRegistry(PathSet paths)
     load();
 }
 
+namespace {
+    class ProviderRegistryInternal : public ProviderRegistry {};
+    Q_GLOBAL_STATIC(ProviderRegistryInternal, providerRegistry)
+}
+
+ProviderRegistry *ProviderRegistry::globalInstance()
+{ return providerRegistry(); }
+
 void ProviderRegistry::load()
 {
+    size_t i = 0;
     for (auto &p : s_builtinProviders) { // (not all builtin providers are stored)
-        auto provider = std::make_shared<OpenaiProviderBuiltin>(&m_builtinStore, p.id, p.name, p.base_url);
+        auto provider = std::make_shared<OpenaiProviderBuiltin>(
+            &m_builtinStore, p.id, p.name, p.icon, p.base_url,
+            QStringList(p.model_whitelist.begin(), p.model_whitelist.end())
+        );
         auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
         if (!unique)
             throw std::logic_error(fmt::format("duplicate builtin provider id: {}", p.id.toString()));
+        m_builtinProviders[i++] = p.id;
     }
     for (auto &p : m_customStore.list()) { // disk is source of truth for custom providers
         if (!p.custom_details) {
@@ -91,11 +104,12 @@ void ProviderRegistry::load()
         auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
         if (!unique)
             qWarning() << "ignoring duplicate custom provider with id:" << p.id;
+        m_customProviders.push_back(std::make_unique<QUuid>(p.id));
     }
 }
 
 [[nodiscard]]
-bool ProviderRegistry::add(std::unique_ptr<ModelProviderCustom> provider)
+bool ProviderRegistry::add(std::shared_ptr<ModelProviderCustom> provider)
 {
     auto [it, unique] = m_providers.emplace(provider->id(), std::move(provider));
     if (unique) {
@@ -105,11 +119,19 @@ bool ProviderRegistry::add(std::unique_ptr<ModelProviderCustom> provider)
     return unique;
 }
 
-auto ProviderRegistry::customProviderAt(size_t i) const -> const ModelProviderCustom *
+auto ProviderRegistry::customProviderAt(size_t i) const -> ModelProviderCustom *
 {
     auto it = m_providers.find(*m_customProviders.at(i));
     Q_ASSERT(it != m_providers.end());
     return &dynamic_cast<ModelProviderCustom &>(*it->second);
+}
+
+auto ProviderRegistry::builtinProviderAt(size_t i) const -> ModelProviderBuiltin *
+{
+    auto it = m_providers.find(m_builtinProviders.at(i));
+    Q_ASSERT(it != m_providers.end());
+    return &dynamic_cast<ModelProviderBuiltin &>(*it->second);
+
 }
 
 auto ProviderRegistry::getSubdirs() -> PathSet
@@ -135,19 +157,31 @@ void ProviderRegistry::onModelPathChanged()
     }
 }
 
-CustomProviderList::CustomProviderList(QPointer<ProviderRegistry> registry)
-    : m_registry(std::move(registry)              )
-    , m_size    (m_registry->customProviderCount())
+auto BuiltinProviderList::roleNames() const -> QHash<int, QByteArray>
+{ return { { Qt::DisplayRole, "data"_ba } }; }
+
+QVariant BuiltinProviderList::data(const QModelIndex &index, int role) const
 {
-    connect(m_registry, &ProviderRegistry::customProviderAdded, this, &CustomProviderList::onCustomProviderAdded);
-    connect(m_registry, &ProviderRegistry::aboutToBeCleared, this, &CustomProviderList::onAboutToBeCleared,
+    auto *registry = ProviderRegistry::globalInstance();
+    if (index.isValid() && index.row() < rowCount() && role == Qt::DisplayRole)
+        return QVariant::fromValue(registry->builtinProviderAt(index.row())->asQObject());
+    return {};
+}
+
+CustomProviderList::CustomProviderList()
+    : m_size(ProviderRegistry::globalInstance()->customProviderCount())
+{
+    auto *registry = ProviderRegistry::globalInstance();
+    connect(registry, &ProviderRegistry::customProviderAdded, this, &CustomProviderList::onCustomProviderAdded);
+    connect(registry, &ProviderRegistry::aboutToBeCleared, this, &CustomProviderList::onAboutToBeCleared,
             Qt::DirectConnection);
 }
 
 QVariant CustomProviderList::data(const QModelIndex &index, int role) const
 {
+    auto *registry = ProviderRegistry::globalInstance();
     if (index.isValid() && index.row() < rowCount() && role == Qt::DisplayRole)
-        return QVariant::fromValue(m_registry->customProviderAt(index.row()));
+        return QVariant::fromValue(registry->customProviderAt(index.row())->asQObject());
     return {};
 }
 
@@ -165,10 +199,10 @@ void CustomProviderList::onAboutToBeCleared()
     endResetModel();
 }
 
-bool CustomProviderListSort::lessThan(const QModelIndex &left, const QModelIndex &right) const
+bool ProviderListSort::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
-    auto *leftData  = sourceModel()->data(left ).value<ModelProviderCustom *>();
-    auto *rightData = sourceModel()->data(right).value<ModelProviderCustom *>();
+    auto *leftData  = sourceModel()->data(left ).value<ModelProvider *>();
+    auto *rightData = sourceModel()->data(right).value<ModelProvider *>();
     if (leftData && rightData)
         return QString::localeAwareCompare(leftData->name(), rightData->name()) < 0;
     return true;
