@@ -6,6 +6,7 @@
 #include <boost/describe/enum.hpp>
 #include <boost/json.hpp> // IWYU pragma: keep
 
+#include <QObject>
 #include <QString>
 #include <QUrl>
 #include <QUuid>
@@ -14,12 +15,19 @@
 namespace gpt4all::ui {
 
 
+inline namespace store_provider {
+
+Q_NAMESPACE
+
 // indices of this enum should be consistent with indices of ProviderDetails
 enum class ProviderType {
     openai = 0,
     ollama = 1,
 };
 BOOST_DESCRIBE_ENUM(ProviderType, openai, ollama)
+Q_ENUM_NS(ProviderType)
+
+} // inline namespace provider
 
 struct CustomProviderDetails {
     QString name;

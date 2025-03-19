@@ -131,6 +131,8 @@ Rectangle {
                 }
                 onTextChanged: {
                     if (!initialized) return;
+                    console.log(`${provider} has an apiKey: ${('apiKey' in provider)},${typeof provider.apiKey},${provider.apiKey}`);
+                    return;
                     ok = provider.setApiKeyQml(text.trim()) && text.trim() !== "";
                 }
                 placeholderText: qsTr("Provider API Key")
@@ -208,7 +210,7 @@ Rectangle {
             property string apiKeyText: apiKeyField.text.trim()
             property string modelNameText: myModelList.currentText.trim()
 
-            enabled: baseUrlGood && apiKeyGood && modelNameText !== ""
+            enabled: nameField.ok && baseUrlField.ok && apiKeyField.ok && modelNameText !== ""
 
             onClicked: {
                 Download.installCompatibleModel(

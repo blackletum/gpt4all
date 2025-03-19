@@ -157,6 +157,8 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("gpt4all.ProviderRegistry", 1, 0, "ProviderRegistry", ProviderRegistry::globalInstance());
     qmlRegisterUncreatableMetaObject(ToolEnums::staticMetaObject, "toolenums", 1, 0, "ToolEnums", "Error: only enums");
     qmlRegisterUncreatableMetaObject(MySettingsEnums::staticMetaObject, "mysettingsenums", 1, 0, "MySettingsEnums", "Error: only enums");
+    qmlRegisterUncreatableMetaObject(gpt4all::ui::llmodel_provider::staticMetaObject, "gpt4all.llmodel_provider", 1, 0, "Provider", "Error: only enums");
+    qmlRegisterUncreatableMetaObject(gpt4all::ui::store_provider::staticMetaObject, "gpt4all.store_provider", 1, 0, "ProviderStore", "Error: only enums");
 
     {
         auto fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);

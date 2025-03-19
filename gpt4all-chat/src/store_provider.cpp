@@ -42,7 +42,7 @@ auto tag_invoke(const boost::json::value_to_tag<ModelProviderData> &, const boos
             json::value_to<QString>(jv.at("name"    )),
             json::value_to<QString>(jv.at("base_url")),
         });
-    ModelProviderData::ProviderDetails provider_details;
+    ModelProviderData::ProviderDetails provider_details = std::monostate();
     switch (type) {
         using enum ProviderType;
     case openai:

@@ -50,9 +50,10 @@ protected:
 
 class OpenaiProvider : public QObject, public virtual ModelProvider {
     Q_OBJECT
-    Q_PROPERTY(QUuid   id        READ id        CONSTANT            )
-    Q_PROPERTY(QString apiKey    READ apiKey    NOTIFY apiKeyChanged)
-    Q_PROPERTY(bool    isBuiltin READ isBuiltin CONSTANT            )
+    Q_PROPERTY(QUuid        id        READ id        CONSTANT            )
+    Q_PROPERTY(QString      apiKey    READ apiKey    NOTIFY apiKeyChanged)
+    Q_PROPERTY(bool         isBuiltin READ isBuiltin CONSTANT            )
+    Q_PROPERTY(ProviderType type      READ type      CONSTANT            )
 
 protected:
     explicit OpenaiProvider();
@@ -63,6 +64,8 @@ public:
 
           QObject *asQObject()       override { return this; }
     const QObject *asQObject() const override { return this; }
+
+    ProviderType type() const final { return ProviderType::openai; }
 
     [[nodiscard]] const QString &apiKey() const { return m_apiKey; }
 
@@ -77,9 +80,9 @@ public:
     auto status    () -> QCoro::Task<ProviderStatus                     > override;
     auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;
 
-    // QML wrapped endpoints
-    Q_INVOKABLE QCoro::QmlTask statusQml    ();
-    Q_INVOKABLE QCoro::QmlTask listModelsQml();
+    // QML endpoints
+    Q_INVOKABLE QCoro::QmlTask statusQml    () { return ModelProvider::statusQml    (); }
+    Q_INVOKABLE QCoro::QmlTask listModelsQml() { return ModelProvider::listModelsQml(); }
 
     [[nodiscard]] auto newModel(const QString &modelName) const -> std::shared_ptr<OpenaiModelDescription>;
 
@@ -139,6 +142,10 @@ public:
 
     [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
     { return setMemberProp<QString>(&OpenaiProviderCustom::m_apiKey, "apiKey", std::move(value)); }
+
+    // QML setters
+    Q_INVOKABLE bool setNameQml   (QString value) { return ModelProviderCustom::setNameQml   (std::move(value)); }
+    Q_INVOKABLE bool setBaseUrlQml(QString value) { return ModelProviderCustom::setBaseUrlQml(std::move(value)); }
 
 Q_SIGNALS:
     void nameChanged   (const QString &value);

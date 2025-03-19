@@ -5,6 +5,7 @@
 #include "qmlsharedptr.h" // IWYU pragma: keep
 #include "utils.h" // IWYU pragma: keep
 
+#include <QCoro/QCoroQmlTask> // IWYU pragma: keep
 #include <gpt4all-backend/ollama-client.h>
 
 #include <QAbstractListModel>
@@ -34,14 +35,11 @@ class QJSEngine;
 template <typename Key, typename T> class QHash;
 namespace QCoro {
     template <typename T> class Task;
-    struct QmlTask;
 }
 
 
 namespace gpt4all::ui {
 
-
-Q_NAMESPACE
 
 class ModelDescription;
 
@@ -71,6 +69,10 @@ QCoro::QmlTask wrapQmlTask(C *obj, F f, QString prefix, Args &&...args);
 template <typename C, typename F, typename... Args>
 bool wrapQmlFunc(C *obj, F &&f, QStringView prefix, Args &&...args);
 
+inline namespace llmodel_provider {
+
+Q_NAMESPACE
+
 enum class GenerationParam  {
     NPredict,
     Temperature,
@@ -81,6 +83,8 @@ enum class GenerationParam  {
     RepeatLastN,
 };
 Q_ENUM_NS(GenerationParam)
+
+} // inline namespace llmodel_provider
 
 class GenerationParams {
 public:
@@ -128,7 +132,8 @@ public:
     virtual       QObject *asQObject() = 0;
     virtual const QObject *asQObject() const = 0;
 
-    virtual bool isBuiltin() const = 0;
+    virtual bool         isBuiltin() const = 0;
+    virtual ProviderType type     () const = 0;
 
     // getters
     [[nodiscard]] const QUuid   &id     () const { return m_id;      }
@@ -141,6 +146,12 @@ public:
     // endpoints
     virtual auto status    () -> QCoro::Task<ProviderStatus                     > = 0;
     virtual auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> = 0;
+
+    // QML endpoints
+    QCoro::QmlTask statusQml()
+    { return wrapQmlTask(this, &ModelProvider::status,     QStringLiteral("ModelProvider::status")    ); }
+    QCoro::QmlTask listModelsQml()
+    { return wrapQmlTask(this, &ModelProvider::listModels, QStringLiteral("ModelProvider::listModels")); }
 
     /// create a model using this provider
     [[nodiscard]] auto newModel(const QVariant &key) const -> std::shared_ptr<ModelDescription>;
@@ -207,9 +218,9 @@ public:
     { return setMemberProp<QUrl   >(&ModelProviderCustom::m_baseUrl, "baseUrl", std::move(value)); }
 
     // QML setters
-    Q_INVOKABLE bool setNameQml   (QString value)
+    bool setNameQml   (QString value)
     { return wrapQmlFunc(this, &ModelProviderCustom::setName,    u"setName",    std::move(value)); }
-    Q_INVOKABLE bool setBaseUrlQml(QString value)
+    bool setBaseUrlQml(QString value)
     { return wrapQmlFunc(this, &ModelProviderCustom::setBaseUrl, u"setBaseUrl", std::move(value)); }
 
     [[nodiscard]] auto persist() -> DataStoreResult<>;

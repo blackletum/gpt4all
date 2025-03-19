@@ -46,8 +46,9 @@ protected:
 
 class OllamaProvider : public QObject, public virtual ModelProvider {
     Q_OBJECT
-    Q_PROPERTY(QUuid id        READ id        CONSTANT)
-    Q_PROPERTY(bool  isBuiltin READ isBuiltin CONSTANT)
+    Q_PROPERTY(QUuid        id        READ id        CONSTANT)
+    Q_PROPERTY(bool         isBuiltin READ isBuiltin CONSTANT)
+    Q_PROPERTY(ProviderType type      READ type      CONSTANT)
 
 protected:
     explicit OllamaProvider();
@@ -58,6 +59,8 @@ public:
           QObject *asQObject()       override { return this; }
     const QObject *asQObject() const override { return this; }
 
+    ProviderType type() const final { return ProviderType::ollama; }
+
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OllamaGenerationParams * override;
 
@@ -65,9 +68,9 @@ public:
     auto status    () -> QCoro::Task<ProviderStatus                     > override;
     auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;
 
-    // QML wrapped endpoints
-    Q_INVOKABLE QCoro::QmlTask statusQml    ();
-    Q_INVOKABLE QCoro::QmlTask listModelsQml();
+    // QML endpoints
+    Q_INVOKABLE QCoro::QmlTask statusQml    () { return ModelProvider::statusQml    (); }
+    Q_INVOKABLE QCoro::QmlTask listModelsQml() { return ModelProvider::listModelsQml(); }
 
     [[nodiscard]] auto newModel(const QByteArray &modelHash) const -> std::shared_ptr<OllamaModelDescription>;
 
@@ -102,6 +105,10 @@ public:
 
     /// Create a new OllamaProvider on disk.
     explicit OllamaProviderCustom(protected_t p, ProviderStore *store, QString name, QUrl baseUrl);
+
+    // QML setters
+    Q_INVOKABLE bool setNameQml   (QString value) { return ModelProviderCustom::setNameQml   (std::move(value)); }
+    Q_INVOKABLE bool setBaseUrlQml(QString value) { return ModelProviderCustom::setBaseUrlQml(std::move(value)); }
 
 Q_SIGNALS:
     void nameChanged   (const QString &value);

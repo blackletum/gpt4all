@@ -155,12 +155,6 @@ auto OpenaiProvider::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringL
     co_return models;
 }
 
-QCoro::QmlTask OpenaiProvider::statusQml()
-{ return wrapQmlTask(this, &OpenaiProvider::status, u"OpenaiProvider::status"_s); }
-
-QCoro::QmlTask OpenaiProvider::listModelsQml()
-{ return wrapQmlTask(this, &OpenaiProvider::listModels, u"OpenaiProvider::listModels"_s); }
-
 auto OpenaiProvider::newModel(const QString &modelName) const -> std::shared_ptr<OpenaiModelDescription>
 { return std::static_pointer_cast<OpenaiModelDescription>(newModelImpl(modelName)); }
 

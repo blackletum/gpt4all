@@ -1,7 +1,6 @@
 #include <fmt/format.h>
 
-#include <QCoro/QCoroQmlTask>
-#include <QCoro/QCoroTask>
+#include <QCoro/QCoroTask> // IWYU pragma: keep
 
 #include <QDebug>
 #include <QVariant>

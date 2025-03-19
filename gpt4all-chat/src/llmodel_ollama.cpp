@@ -64,12 +64,6 @@ auto OllamaProvider::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringL
     co_return res;
 }
 
-QCoro::QmlTask OllamaProvider::statusQml()
-{ return wrapQmlTask(this, &OllamaProvider::status, u"OllamaProvider::status"_s); }
-
-QCoro::QmlTask OllamaProvider::listModelsQml()
-{ return wrapQmlTask(this, &OllamaProvider::listModels, u"OllamaProvider::listModels"_s); }
-
 auto OllamaProvider::newModel(const QByteArray &modelHash) const -> std::shared_ptr<OllamaModelDescription>
 { return std::static_pointer_cast<OllamaModelDescription>(newModelImpl(modelHash)); }
 
