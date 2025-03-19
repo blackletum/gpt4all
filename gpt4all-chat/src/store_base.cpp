@@ -2,6 +2,7 @@
 
 #include <fmt/format.h>
 #include <gpt4all-backend/formatters.h> // IWYU pragma: keep
+#include <tl/generator.hpp>
 
 #include <QByteArray>
 #include <QDebug>
@@ -157,39 +158,32 @@ auto DataStoreBase::read(QFileDevice &file, json::stream_parser &parser) -> Data
         }
     };
 
-    auto inner = [&] -> DataStoreResult<> {
-        bool partialRead = false;
-        auto chunkIt = iterChunks();
-        // read JSON data
+    bool partialRead = false;
+    auto chunkIt = iterChunks();
+
+    // read JSON data
+    parser.reset();
+    for (auto &chunk : chunkIt) {
+        if (!chunk)
+            return std::unexpected(chunk.error());
+        size_t nRead = parser.write_some(chunk->data(), chunk->size());
+        // consume trailing whitespace in chunk
+        if (nRead < chunk->size()) {
+            auto rest = QByteArrayView(*chunk).slice(nRead);
+            if (!rest.trimmed().isEmpty())
+                return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(QByteArray(rest)));
+            partialRead = true;
+            break;
+        }
+    }
+    // consume trailing whitespace in file
+    if (partialRead) {
         for (auto &chunk : chunkIt) {
             if (!chunk)
                 return std::unexpected(chunk.error());
-            size_t nRead = parser.write_some(chunk->data(), chunk->size());
-            // consume trailing whitespace in chunk
-            if (nRead < chunk->size()) {
-                auto rest = QByteArrayView(*chunk).slice(nRead);
-                if (!rest.trimmed().isEmpty())
-                    return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(QByteArray(rest)));
-                partialRead = true;
-                break;
-            }
+            if (!chunk->trimmed().isEmpty())
+                return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(*chunk));
         }
-        // consume trailing whitespace in file
-        if (partialRead) {
-            for (auto &chunk : chunkIt) {
-                if (!chunk)
-                    return std::unexpected(chunk.error());
-                if (!chunk->trimmed().isEmpty())
-                    return std::unexpected(u"unexpected data after json: \"%1\""_s.arg(*chunk));
-            }
-        }
-        return {};
-    };
-
-    auto res = inner();
-    if (!res) {
-        parser.reset();
-        return std::unexpected(res.error());
     }
     return parser.release();
 }

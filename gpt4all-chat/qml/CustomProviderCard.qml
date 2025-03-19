@@ -2,18 +2,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import gpt4all.ProviderRegistry
+
 Rectangle {
-    id: remoteModelCard
-    property var provider: null
+    id: root
+    required property bool withApiKey
+    required property var createProvider
     property alias providerName: providerNameLabel.text
     property alias providerImage: myimage.source
     property alias providerDesc: providerDescLabel.text
-    property bool providerUsesApiKey: true
-
-    // for internal use
-    property bool apiKeyRequired: provider === null ? providerUsesApiKey : "apiKey" in provider
-    property bool apiKeyGood: !apiKeyRequired // (overwritten later if required)
-    property bool baseUrlGood: provider !== null // (overwritten later if custom)
 
     color: theme.conversationBackground
     radius: 10
@@ -78,7 +75,44 @@ Rectangle {
         spacing: 30
 
         ColumnLayout {
-            visible: apiKeyRequired
+            MySettingsLabel {
+                text: qsTr("Name")
+                font.bold: true
+                font.pixelSize: theme.fontSizeLarge
+                color: theme.settingsTitleTextColor
+            }
+            MyTextField {
+                id: nameField
+                Layout.fillWidth: true
+                font.pixelSize: theme.fontSizeLarge
+                wrapMode: Text.WrapAnywhere
+                placeholderText: qsTr("Provider Name")
+                Accessible.role: Accessible.EditableText
+                Accessible.name: placeholderText
+            }
+        }
+
+        ColumnLayout {
+            MySettingsLabel {
+                text: qsTr("Base URL")
+                font.bold: true
+                font.pixelSize: theme.fontSizeLarge
+                color: theme.settingsTitleTextColor
+            }
+            MyTextField {
+                id: baseUrlField
+                property bool ok: text.trim() !== ""
+                Layout.fillWidth: true
+                font.pixelSize: theme.fontSizeLarge
+                wrapMode: Text.WrapAnywhere
+                placeholderText: qsTr("Provider Base URL")
+                Accessible.role: Accessible.EditableText
+                Accessible.name: placeholderText
+            }
+        }
+
+        ColumnLayout {
+            visible: withApiKey
 
             MySettingsLabel {
                 text: qsTr("API Key")
@@ -93,53 +127,15 @@ Rectangle {
                 font.pixelSize: theme.fontSizeLarge
                 wrapMode: Text.WrapAnywhere
                 echoMode: TextField.Password
-                function showError() {
-                    messageToast.show(qsTr("ERROR: $API_KEY is empty."));
-                    apiKeyField.placeholderTextColor = theme.textErrorColor;
-                }
-                Component.onCompleted: { if (parent.visible && provider !== null) { text = provider.apiKey; } }
-                onTextChanged: {
-                    apiKeyField.placeholderTextColor = theme.mutedTextColor;
-                    if (provider !== null) { apiKeyGood = provider.setApiKeyQml(text) && text !== ""; }
-                }
-                placeholderText: qsTr("enter $API_KEY")
+                placeholderText: qsTr("Provider API Key")
                 Accessible.role: Accessible.EditableText
                 Accessible.name: placeholderText
             }
         }
 
         ColumnLayout {
-            visible: provider === null
             MySettingsLabel {
-                text: qsTr("Base Url")
-                font.bold: true
-                font.pixelSize: theme.fontSizeLarge
-                color: theme.settingsTitleTextColor
-            }
-            MyTextField {
-                id: baseUrlField
-                Layout.fillWidth: true
-                font.pixelSize: theme.fontSizeLarge
-                wrapMode: Text.WrapAnywhere
-                function showError() {
-                    messageToast.show(qsTr("ERROR: $BASE_URL is empty."));
-                    baseUrlField.placeholderTextColor = theme.textErrorColor;
-                }
-                onTextChanged: {
-                    baseUrlField.placeholderTextColor = theme.mutedTextColor;
-                    baseUrlGood = text.trim() !== "";
-                }
-                placeholderText: qsTr("enter $BASE_URL")
-                Accessible.role: Accessible.EditableText
-                Accessible.name: placeholderText
-            }
-        }
-
-        ColumnLayout {
-            visible: myModelList.count > 0
-
-            MySettingsLabel {
-                text: qsTr("Models")
+                text: qsTr("Status")
                 font.bold: true
                 font.pixelSize: theme.fontSizeLarge
                 color: theme.settingsTitleTextColor
@@ -148,30 +144,36 @@ Rectangle {
             RowLayout {
                 spacing: 10
 
-                MyComboBox {
+                MyTextField {
+                    id: statusText
+                    property var provider: null // owns the new provider
+                    enabled: false
                     Layout.fillWidth: true
-                    id: myModelList
-                    currentIndex: -1
-                    property bool ready: baseUrlGood && apiKeyGood
-                    onReadyChanged: {
-                        if (!ready) { return; }
-                        let providerRef = null; // owns the new provider
-                        let provider = remoteModelCard.provider;
-                        if (provider === null) {
-                            // TODO: custom OpenAI
-                            providerRef = QmlFunctions.newCustomOllamaProvider("foo", baseUrlField.text.trim());
-                            if (providerRef !== null)
-                                provider = providerRef.get();
-                        }
-                        if (provider !== null) {
-                            provider.listModelsQml().then(modelList => {
-                                if (modelList !== null) {
-                                    model = modelList;
-                                    currentIndex = -1;
+                    font.pixelSize: theme.fontSizeLarge
+                    property var inputs: ({
+                        name    : nameField   .text.trim(),
+                        baseUrl : baseUrlField.text.trim(),
+                        apiKey  : apiKeyField .text.trim(),
+                    })
+                    function update() {
+                        provider = null;
+                        text = qsTr("...");
+                        if (inputs.name === "" || inputs.baseUrl === "")
+                            return;
+                        const args = [inputs.name, inputs.baseUrl];
+                        if (withApiKey)
+                            args.push(inputs.apiKey);
+                        let p = createProvider(...args);
+                        if (p !== null)
+                            p.get().statusQml().then(status => {
+                                if (status !== null) {
+                                    if (status.ok) { provider = p; }
+                                    text = status.detail;
                                 }
                             });
-                        }
                     }
+                    Component.onCompleted: update()
+                    onInputsChanged: update()
                 }
             }
         }
@@ -181,24 +183,11 @@ Rectangle {
             Layout.alignment: Qt.AlignRight
             text: qsTr("Install")
             font.pixelSize: theme.fontSizeLarge
-
-            property string apiKeyText: apiKeyField.text.trim()
-            property string baseUrlText: provider === null ? baseUrlField.text.trim() : provider.baseUrl
-            property string modelNameText: myModelList.currentText.trim()
-
-            enabled: baseUrlGood && apiKeyGood && modelNameText !== ""
-
-            onClicked: {
-                Download.installCompatibleModel(
-                            modelNameText,
-                            apiKeyText,
-                            baseUrlText,
-                            );
-                myModelList.currentIndex = -1;
-            }
+            enabled: statusText.provider !== null
+            onClicked: ProviderRegistry.addQml(statusText.provider)
             Accessible.role: Accessible.Button
             Accessible.name: qsTr("Install")
-            Accessible.description: qsTr("Install remote model")
+            Accessible.description: qsTr("Install custom provider")
         }
     }
 }

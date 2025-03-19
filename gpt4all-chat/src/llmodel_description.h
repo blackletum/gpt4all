@@ -37,6 +37,8 @@ public:
 
 protected:
     [[nodiscard]] virtual auto newInstanceImpl(QNetworkAccessManager *nam) const -> ChatLLMInstance * = 0;
+
+    template <typename T> friend struct Creatable;
 };
 
 

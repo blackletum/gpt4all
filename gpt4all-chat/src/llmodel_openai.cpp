@@ -14,6 +14,7 @@
 
 #include <QAnyStringView>
 #include <QByteArray>
+#include <QJSEngine>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -88,6 +89,13 @@ auto OpenaiGenerationParams::toMap() const -> QMap<QLatin1StringView, QVariant>
     };
 }
 
+OpenaiProvider::OpenaiProvider()
+{ QJSEngine::setObjectOwnership(this, QJSEngine::CppOwnership); }
+
+OpenaiProvider::OpenaiProvider(QString apiKey)
+    : m_apiKey(std::move(apiKey))
+{ QJSEngine::setObjectOwnership(this, QJSEngine::CppOwnership); }
+
 OpenaiProvider::~OpenaiProvider() noexcept = default;
 
 Q_INVOKABLE bool OpenaiProvider::setApiKeyQml(QString value)
@@ -108,13 +116,22 @@ auto OpenaiProvider::makeGenerationParams(const QMap<GenerationParam, QVariant> 
     -> OpenaiGenerationParams *
 { return new OpenaiGenerationParams(values); }
 
+auto OpenaiProvider::status() -> QCoro::Task<ProviderStatus>
+{
+    auto resp = co_await listModels();
+    if (resp)
+        co_return ProviderStatus(tr("OK"));
+    co_return ProviderStatus(resp.error());
+}
+
 auto OpenaiProvider::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>>
 {
+    auto *mySettings = MySettings::globalInstance();
     auto *nam = networkAccessManager();
 
     QNetworkRequest request(m_baseUrl.resolved(u"models"_s));
-    request.setHeader   (QNetworkRequest::ContentTypeHeader, "application/json"_ba);
-    request.setRawHeader("Authorization"_ba, fmt::format("Bearer {}", m_apiKey).c_str());
+    request.setHeader   (QNetworkRequest::UserAgentHeader, mySettings->userAgent());
+    request.setRawHeader("authorization"_ba, fmt::format("Bearer {}", m_apiKey).c_str());
 
     std::unique_ptr<QNetworkReply> reply(nam->get(request));
     QRestReply restReply(reply.get());
@@ -146,20 +163,27 @@ auto OpenaiProvider::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringL
     co_return models;
 }
 
+QCoro::QmlTask OpenaiProvider::statusQml()
+{ return wrapQmlTask(this, &OpenaiProvider::status, u"OpenaiProvider::status"_s); }
+
 QCoro::QmlTask OpenaiProvider::listModelsQml()
+{ return wrapQmlTask(this, &OpenaiProvider::listModels, u"OpenaiProvider::listModels"_s); }
+
+auto OpenaiProvider::newModel(const QString &modelName) const -> std::shared_ptr<OpenaiModelDescription>
+{ return std::static_pointer_cast<OpenaiModelDescription>(newModelImpl(modelName)); }
+
+auto OpenaiProvider::newModelImpl(const QVariant &key) const -> std::shared_ptr<ModelDescription>
 {
-    return [this]() -> QCoro::Task<QVariant> {
-        auto result = co_await listModels();
-        if (result)
-            co_return *result;
-        qWarning().noquote() << "OpenaiProvider::listModels failed:" << result.error().errorString();
-        co_return QVariant::fromValue(nullptr);
-    }();
+    if (!key.canConvert<QString>())
+        throw std::invalid_argument(fmt::format("expected modelName type QString, got {}", key.typeName()));
+    return OpenaiModelDescription::create(
+        std::shared_ptr<const OpenaiProvider>(shared_from_this(), this), key.toString()
+    );
 }
 
-OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl icon, QUrl baseUrl,
-                                             QStringList modelWhitelist)
-    : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
+OpenaiProviderBuiltin::OpenaiProviderBuiltin(protected_t p, ProviderStore *store, QUuid id, QString name, QUrl icon,
+                                             QUrl baseUrl, std::unordered_set<QString> modelWhitelist)
+    : ModelProvider(p, std::move(id), std::move(name), std::move(baseUrl))
     , ModelProviderBuiltin(std::move(icon))
     , ModelProviderMutable(store)
     , m_modelWhitelist(std::move(modelWhitelist))
@@ -173,6 +197,15 @@ OpenaiProviderBuiltin::OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QSt
     }
 }
 
+auto OpenaiProviderBuiltin::listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>>
+{
+    auto models = co_await OpenaiProvider::listModels();
+    if (!models)
+        co_return std::unexpected(models.error());
+    models->removeIf([&](auto &m) { return !m_modelWhitelist.contains(m); });
+    co_return *models; 
+}
+
 auto OpenaiProviderBuiltin::asData() -> ModelProviderData
 {
     return {
@@ -183,22 +216,25 @@ auto OpenaiProviderBuiltin::asData() -> ModelProviderData
 }
 
 /// load
-OpenaiProviderCustom::OpenaiProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl, QString apiKey)
-    : ModelProvider(std::move(id), std::move(name), std::move(baseUrl))
+OpenaiProviderCustom::OpenaiProviderCustom(protected_t p, ProviderStore *store, QUuid id, QString name, QUrl baseUrl,
+                                           QString apiKey)
+    : ModelProvider(p, std::move(id), std::move(name), std::move(baseUrl))
     , OpenaiProvider(std::move(apiKey))
     , ModelProviderCustom(store)
-    {}
+{
+    if (auto res = m_store->acquire(m_id); !res)
+        res.error().raise();
+}
 
 /// create
-OpenaiProviderCustom::OpenaiProviderCustom(ProviderStore *store, QString name, QUrl baseUrl, QString apiKey)
-    : ModelProvider(std::move(name), std::move(baseUrl))
+OpenaiProviderCustom::OpenaiProviderCustom(protected_t p, ProviderStore *store, QString name, QUrl baseUrl,
+                                           QString apiKey)
+    : ModelProvider(p, QUuid::createUuid(), std::move(name), std::move(baseUrl))
     , ModelProviderCustom(std::move(store))
     , OpenaiProvider(std::move(apiKey))
 {
-    auto data = m_store->create(m_name, m_baseUrl, m_apiKey);
-    if (!data)
-        data.error().raise();
-    m_id = (*data)->id;
+    if (auto res = m_store->acquire(m_id); !res)
+        res.error().raise();
 }
 
 auto OpenaiProviderCustom::asData() -> ModelProviderData
@@ -330,8 +366,9 @@ auto OpenaiChatModel::generate(QStringView prompt, const GenerationParams *param
 
     auto &provider = *m_description->provider();
     QNetworkRequest request(provider.baseUrl().resolved(QUrl("/v1/chat/completions")));
-    request.setHeader(QNetworkRequest::UserAgentHeader, mySettings->userAgent());
-    request.setRawHeader("authorization", u"Bearer %1"_s.arg(provider.apiKey()).toUtf8());
+    request.setHeader   (QNetworkRequest::UserAgentHeader,   mySettings->userAgent());
+    request.setHeader   (QNetworkRequest::ContentTypeHeader, "application/json"_ba  );
+    request.setRawHeader("authorization"_ba, fmt::format("Bearer {}", provider.apiKey()).c_str());
 
     QRestAccessManager restNam(m_nam);
     std::unique_ptr<QNetworkReply> reply(restNam.post(request, QJsonDocument(reqBody)));

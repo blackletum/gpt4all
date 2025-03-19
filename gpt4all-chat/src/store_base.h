@@ -4,7 +4,6 @@
 
 #include <boost/json.hpp> // IWYU pragma: keep
 #include <boost/system.hpp> // IWYU pragma: keep
-#include <tl/generator.hpp>
 
 #include <QFile>
 #include <QFileDevice>
@@ -21,6 +20,8 @@
 #include <unordered_set>
 #include <utility>
 #include <variant>
+
+#include <ranges>
 
 class QByteArray;
 class QSaveFile;
@@ -96,7 +97,7 @@ class DataStore : public DataStoreBase {
 public:
     explicit DataStore(std::filesystem::path path);
 
-    auto list() -> tl::generator<const T &>;
+    auto list() { return m_entries | std::views::transform([](auto &e) { return e.second; }); }
     auto setData(T data, std::optional<QString> createName = {}) -> DataStoreResult<>;
     auto remove(const QUuid &id) -> DataStoreResult<>;
 
@@ -109,7 +110,7 @@ public:
     { auto it = m_entries.find(id); return it == m_entries.end() ? std::nullopt : std::optional(&it->second); }
 
 protected:
-    auto createImpl(T data, const QString &name) -> DataStoreResult<const T *>;
+    auto createImpl(T data, const QString &name) -> DataStoreResult<>;
     auto clear() -> DataStoreResult<> final;
     CacheInsertResult cacheInsert(const boost::json::value &jv) override;
 

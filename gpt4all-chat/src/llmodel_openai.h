@@ -1,5 +1,6 @@
 #pragma once
 
+#include "creatable.h"
 #include "llmodel_chat.h"
 #include "llmodel_description.h"
 #include "llmodel_provider.h"
@@ -16,6 +17,7 @@
 #include <QtTypes> // IWYU pragma: keep
 
 #include <memory>
+#include <unordered_set>
 #include <utility>
 
 class QNetworkAccessManager;
@@ -28,6 +30,7 @@ namespace gpt4all::ui {
 
 
 class OpenaiChatModel;
+class OpenaiModelDescription;
 
 struct OpenaiGenerationParamsData {
     uint  n_predict;
@@ -51,9 +54,8 @@ class OpenaiProvider : public QObject, public virtual ModelProvider {
     Q_PROPERTY(QString apiKey READ apiKey NOTIFY apiKeyChanged)
 
 protected:
-    explicit OpenaiProvider() = default;
-    explicit OpenaiProvider(QString apiKey)
-        : m_apiKey(std::move(apiKey)) {}
+    explicit OpenaiProvider();
+    explicit OpenaiProvider(QString apiKey);
 
 public:
     ~OpenaiProvider() noexcept override = 0;
@@ -69,50 +71,69 @@ public:
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OpenaiGenerationParams * override;
 
-    auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>>;
+    // endpoints
+    auto status    () -> QCoro::Task<ProviderStatus                     > override;
+    auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;
+
+    // QML wrapped endpoints
+    Q_INVOKABLE QCoro::QmlTask statusQml    ();
     Q_INVOKABLE QCoro::QmlTask listModelsQml();
+
+    [[nodiscard]] auto newModel(const QString &modelName) const -> std::shared_ptr<OpenaiModelDescription>;
 
 Q_SIGNALS:
     void apiKeyChanged(const QString &value);
 
 protected:
+    [[nodiscard]] auto newModelImpl(const QVariant &key) const -> std::shared_ptr<ModelDescription> final;
+
     QString m_apiKey;
 };
 
-class OpenaiProviderBuiltin : public OpenaiProvider, public ModelProviderBuiltin, public ModelProviderMutable {
+class OpenaiProviderBuiltin
+    : public OpenaiProvider
+    , public ModelProviderBuiltin
+    , public ModelProviderMutable
+    , public Creatable<OpenaiProviderBuiltin>
+{
     Q_OBJECT
     Q_PROPERTY(QString     name           READ name           CONSTANT)
     Q_PROPERTY(QUrl        icon           READ icon           CONSTANT)
     Q_PROPERTY(QUrl        baseUrl        READ baseUrl        CONSTANT)
-    Q_PROPERTY(QStringList modelWhitelist READ modelWhitelist CONSTANT)
 
 public:
     /// Create a new built-in OpenAI provider, loading its API key from disk if known.
-    explicit OpenaiProviderBuiltin(ProviderStore *store, QUuid id, QString name, QUrl icon, QUrl baseUrl,
-                                   QStringList modelWhitelist);
-
-    [[nodiscard]] const QStringList &modelWhitelist() { return m_modelWhitelist; }
+    explicit OpenaiProviderBuiltin(protected_t p, ProviderStore *store, QUuid id, QString name, QUrl icon, QUrl baseUrl,
+                                   std::unordered_set<QString> modelWhitelist);
 
     [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
     { return setMemberProp<QString>(&OpenaiProviderBuiltin::m_apiKey, "apiKey", std::move(value), /*createName*/ m_name); }
 
+    // override for model whitelist
+    auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;
+
+Q_SIGNALS:
+    void apiKeyChanged(const QString &value);
+
 protected:
     auto asData() -> ModelProviderData override;
 
-    QStringList m_modelWhitelist;
+    std::unordered_set<QString> m_modelWhitelist;
 };
 
-class OpenaiProviderCustom final : public OpenaiProvider, public ModelProviderCustom {
+class OpenaiProviderCustom final
+    : public OpenaiProvider, public ModelProviderCustom, public Creatable<OpenaiProviderCustom>
+{
     Q_OBJECT
     Q_PROPERTY(QString name    READ name    NOTIFY nameChanged   )
     Q_PROPERTY(QUrl    baseUrl READ baseUrl NOTIFY baseUrlChanged)
 
 public:
     /// Load an existing OpenaiProvider from disk.
-    explicit OpenaiProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl, QString apiKey);
+    explicit OpenaiProviderCustom(protected_t p, ProviderStore *store, QUuid id, QString name, QUrl baseUrl, QString apiKey);
 
     /// Create a new OpenaiProvider on disk.
-    explicit OpenaiProviderCustom(ProviderStore *store, QString name, QUrl baseUrl, QString apiKey);
+    explicit OpenaiProviderCustom(protected_t p, ProviderStore *store, QString name, QUrl baseUrl, QString apiKey);
 
     [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
     { return setMemberProp<QString>(&OpenaiProviderCustom::m_apiKey, "apiKey", std::move(value)); }
@@ -126,16 +147,12 @@ protected:
     auto asData() -> ModelProviderData override;
 };
 
-class OpenaiModelDescription : public ModelDescription {
+class OpenaiModelDescription : public ModelDescription, public Creatable<OpenaiModelDescription> {
     Q_GADGET
     Q_PROPERTY(QString modelName READ modelName CONSTANT)
 
 public:
     explicit OpenaiModelDescription(protected_t, std::shared_ptr<const OpenaiProvider> provider, QString modelName);
-
-    static auto create(std::shared_ptr<const OpenaiProvider> provider, QByteArray modelHash)
-        -> std::shared_ptr<OpenaiModelDescription>
-    { return std::make_shared<OpenaiModelDescription>(protected_t(), std::move(provider), std::move(modelHash)); }
 
     // getters
     [[nodiscard]] auto           provider () const -> const OpenaiProvider * override { return m_provider.get(); }

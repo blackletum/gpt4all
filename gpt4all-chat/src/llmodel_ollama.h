@@ -1,8 +1,12 @@
 #pragma once
 
+#include "creatable.h"
 #include "llmodel_chat.h"
 #include "llmodel_description.h"
 #include "llmodel_provider.h"
+
+#include <QCoro/QCoroQmlTask> // IWYU pragma: keep
+#include <gpt4all-backend/ollama-client.h>
 
 #include <QByteArray>
 #include <QLatin1StringView> // IWYU pragma: keep
@@ -11,6 +15,8 @@
 #include <QUrl>
 #include <QVariant>
 #include <QtTypes> // IWYU pragma: keep
+
+#include <utility>
 
 class QNetworkAccessManager;
 template <typename Key, typename T> class QMap;
@@ -21,6 +27,7 @@ namespace gpt4all::ui {
 
 
 class OllamaChatModel;
+class OllamaModelDescription;
 
 struct OllamaGenerationParamsData {
     uint n_predict;
@@ -38,8 +45,11 @@ protected:
 };
 
 class OllamaProvider : public QObject, public virtual ModelProvider {
-    Q_GADGET
+    Q_OBJECT
     Q_PROPERTY(QUuid id READ id CONSTANT)
+
+protected:
+    explicit OllamaProvider();
 
 public:
     ~OllamaProvider() noexcept override = 0;
@@ -49,30 +59,48 @@ public:
 
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OllamaGenerationParams * override;
+
+    // endpoints
+    auto status    () -> QCoro::Task<ProviderStatus                     > override;
+    auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;
+
+    // QML wrapped endpoints
+    Q_INVOKABLE QCoro::QmlTask statusQml    ();
+    Q_INVOKABLE QCoro::QmlTask listModelsQml();
+
+    [[nodiscard]] auto newModel(const QByteArray &modelHash) const -> std::shared_ptr<OllamaModelDescription>;
+
+protected:
+    [[nodiscard]] auto newModelImpl(const QVariant &key) const -> std::shared_ptr<ModelDescription> final;
+
+private:
+    backend::OllamaClient makeClient();
 };
 
-class OllamaProviderBuiltin : public OllamaProvider {
-    Q_GADGET
+class OllamaProviderBuiltin : public OllamaProvider, public Creatable<OllamaProviderBuiltin> {
+    Q_OBJECT
     Q_PROPERTY(QString name    READ name    CONSTANT)
     Q_PROPERTY(QUrl    baseUrl READ baseUrl CONSTANT)
 
 public:
     /// Create a new built-in Ollama provider (transient).
-    explicit OllamaProviderBuiltin(QUuid id, QString name, QUrl baseUrl)
-        : ModelProvider(std::move(id), std::move(name), std::move(baseUrl)) {}
+    explicit OllamaProviderBuiltin(protected_t p, QUuid id, QString name, QUrl baseUrl)
+        : ModelProvider(p, std::move(id), std::move(name), std::move(baseUrl)) {}
 };
 
-class OllamaProviderCustom final : public OllamaProvider, public ModelProviderCustom {
+class OllamaProviderCustom final
+    : public OllamaProvider, public ModelProviderCustom, public Creatable<OllamaProviderCustom>
+{
     Q_OBJECT
     Q_PROPERTY(QString name    READ name    NOTIFY nameChanged   )
     Q_PROPERTY(QUrl    baseUrl READ baseUrl NOTIFY baseUrlChanged)
 
 public:
     /// Load an existing OllamaProvider from disk.
-    explicit OllamaProviderCustom(ProviderStore *store, QUuid id, QString name, QUrl baseUrl);
+    explicit OllamaProviderCustom(protected_t p, ProviderStore *store, QUuid id, QString name, QUrl baseUrl);
 
     /// Create a new OllamaProvider on disk.
-    explicit OllamaProviderCustom(ProviderStore *store, QString name, QUrl baseUrl);
+    explicit OllamaProviderCustom(protected_t p, ProviderStore *store, QString name, QUrl baseUrl);
 
 Q_SIGNALS:
     void nameChanged   (const QString &value);
@@ -82,16 +110,12 @@ protected:
     auto asData() -> ModelProviderData override;
 };
 
-class OllamaModelDescription : public ModelDescription {
+class OllamaModelDescription : public ModelDescription, public Creatable<OllamaModelDescription> {
     Q_GADGET
     Q_PROPERTY(QByteArray modelHash READ modelHash CONSTANT)
 
 public:
     explicit OllamaModelDescription(protected_t, std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash);
-
-    static auto create(std::shared_ptr<const OllamaProvider> provider, QByteArray modelHash)
-        -> std::shared_ptr<OllamaModelDescription>
-    { return std::make_shared<OllamaModelDescription>(protected_t(), std::move(provider), std::move(modelHash)); }
 
     // getters
     [[nodiscard]] auto              provider () const -> const OllamaProvider * override { return m_provider.get(); }

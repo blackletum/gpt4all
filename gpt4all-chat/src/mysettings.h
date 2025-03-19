@@ -88,7 +88,7 @@ public Q_SLOTS:
 public:
     static MySettings *globalInstance();
 
-    static const QString &userAgent();
+    static const QByteArray &userAgent();
 
     Q_INVOKABLE static QVariant checkJinjaTemplateError(const QString &tmpl);
 

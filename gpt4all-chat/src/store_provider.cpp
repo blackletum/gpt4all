@@ -57,25 +57,9 @@ auto tag_invoke(const boost::json::value_to_tag<ModelProviderData> &, const boos
     };
 }
 
-auto ProviderStore::create(QString name, QUrl base_url, QString api_key)
-    -> DataStoreResult<const ModelProviderData *>
+auto ProviderStore::create(ModelProviderData data) -> DataStoreResult<>
 {
-    ModelProviderData data {
-        .id               = QUuid::createUuid(),
-        .custom_details   = CustomProviderDetails { name, std::move(base_url) },
-        .provider_details = OpenaiProviderDetails { std::move(api_key)        },
-    };
-    return createImpl(std::move(data), name);
-}
-
-auto ProviderStore::create(QString name, QUrl base_url)
-    -> DataStoreResult<const ModelProviderData *>
-{
-    ModelProviderData data {
-        .id               = QUuid::createUuid(),
-        .custom_details   = CustomProviderDetails { name, std::move(base_url) },
-        .provider_details = {},
-    };
+    auto name = data.custom_details.value().name;
     return createImpl(std::move(data), name);
 }
 

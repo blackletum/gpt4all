@@ -18,11 +18,11 @@ QString restErrorString(const QRestReply &reply)
 
     if (!reply.isHttpStatusSuccess()) {
         auto code   = reply.httpStatus();
-        auto reason = nr->attribute(QNetworkRequest::HttpReasonPhraseAttribute);
+        auto reason = nr->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
         return u"HTTP %1%2%3 for URL \"%4\""_s.arg(
             QString::number(code),
-            reason.isValid() ? u" "_s : QString(),
-            reason.toString(),
+            reason.isEmpty() ? QString() : u" "_s,
+            reason,
             nr->request().url().toString()
         );
     }

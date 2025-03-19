@@ -51,7 +51,7 @@ struct ListModelResponse {
     QString                     digest;
     std::optional<ModelDetails> details;
 };
-BOOST_DESCRIBE_STRUCT(ListModelResponse, (), (model, modified_at, size, digest, details))
+BOOST_DESCRIBE_STRUCT(ListModelResponse, (), (name, model, modified_at, size, digest, details))
 
 using ToolCallFunctionArguments = boost::json::object;
 

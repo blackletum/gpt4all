@@ -12,6 +12,8 @@
 #include <QUrl>
 
 #include <expected>
+#include <memory>
+#include <optional>
 #include <utility>
 #include <variant>
 
@@ -24,7 +26,7 @@ namespace gpt4all::backend {
 
 struct ResponseError {
 public:
-    struct BadStatus { int code; };
+    struct BadStatus { int code; std::optional<QString> reason; };
     using ErrorCode = std::variant<
         QNetworkReply::NetworkError,
         boost::system::error_code,
@@ -34,8 +36,8 @@ public:
     ResponseError(const QRestReply *reply);
     ResponseError(const boost::system::system_error &e);
 
-    const ErrorCode &error      () { return m_error;       }
-    const QString   &errorString() { return m_errorString; }
+    const ErrorCode &error      () const { return m_error;       }
+    const QString   &errorString() const { return m_errorString; }
 
 private:
     ErrorCode m_error;
@@ -47,9 +49,10 @@ using DataOrRespErr = std::expected<T, ResponseError>;
 
 class OllamaClient {
 public:
-    OllamaClient(QUrl baseUrl, QString m_userAgent)
-        : m_baseUrl(baseUrl)
+    OllamaClient(QUrl baseUrl, QString m_userAgent, QNetworkAccessManager *nam)
+        : m_baseUrl(std::move(baseUrl))
         , m_userAgent(std::move(m_userAgent))
+        , m_nam(nam)
         {}
 
     const QUrl &baseUrl() const { return m_baseUrl; }
@@ -70,28 +73,28 @@ public:
 private:
     QNetworkRequest makeRequest(const QString &path) const;
 
-    auto processResponse(QNetworkReply &reply) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
+    auto processResponse(std::unique_ptr<QNetworkReply> reply) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
 
     template <typename Resp>
-    auto get(const QString &path) -> QCoro::Task<DataOrRespErr<Resp>>;
+    auto get(QString path) -> QCoro::Task<DataOrRespErr<Resp>>;
     template <typename Resp, typename Req>
-    auto post(const QString &path, Req const &body) -> QCoro::Task<DataOrRespErr<Resp>>;
+    auto post(QString path, Req const &body) -> QCoro::Task<DataOrRespErr<Resp>>;
 
-    auto getJson(const QString &path) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
+    auto getJson(QString path) -> QCoro::Task<DataOrRespErr<boost::json::value>>;
     auto postJson(const QString &path, const boost::json::value &body)
         -> QCoro::Task<DataOrRespErr<boost::json::value>>;
 
 private:
-    QUrl                       m_baseUrl;
-    QString                    m_userAgent;
-    QNetworkAccessManager      m_nam;
-    boost::json::stream_parser m_parser;
+    QUrl                        m_baseUrl;
+    QString                     m_userAgent;
+    QNetworkAccessManager      *m_nam;
+    boost::json::stream_parser  m_parser;
 };
 
-extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>;
-extern template auto OllamaClient::get(const QString &) -> QCoro::Task<DataOrRespErr<ollama::ListResponse>>;
+extern template auto OllamaClient::get(QString) -> QCoro::Task<DataOrRespErr<ollama::VersionResponse>>;
+extern template auto OllamaClient::get(QString) -> QCoro::Task<DataOrRespErr<ollama::ListResponse>>;
 
-extern template auto OllamaClient::post(const QString &, const ollama::ShowRequest &)
+extern template auto OllamaClient::post(QString, const ollama::ShowRequest &)
     -> QCoro::Task<DataOrRespErr<ollama::ShowResponse>>;
 
 

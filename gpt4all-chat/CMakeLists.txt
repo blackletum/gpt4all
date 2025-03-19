@@ -253,6 +253,8 @@ qt_add_executable(chat
     src/modellist.cpp             src/modellist.h
     src/mysettings.cpp            src/mysettings.h
     src/network.cpp               src/network.h
+    src/qmlfunctions.cpp          src/qmlfunctions.h
+    src/qmlsharedptr.cpp          src/qmlsharedptr.h
     src/server.cpp                src/server.h
     src/store_base.cpp            src/store_base.h
     src/store_provider.cpp        src/store_provider.h
@@ -272,18 +274,20 @@ qt_add_qml_module(chat
     QML_FILES
       main.qml
       qml/AddCollectionView.qml
+      qml/AddCustomProviderView.qml
       qml/AddModelView.qml
       qml/AddGPT4AllModelView.qml
       qml/AddHFModelView.qml
       qml/AddRemoteModelView.qml
       qml/ApplicationSettings.qml
-      qml/ChatDrawer.qml
       qml/ChatCollapsibleItem.qml
+      qml/ChatDrawer.qml
       qml/ChatItemView.qml
       qml/ChatMessageButton.qml
       qml/ChatTextItem.qml
       qml/ChatView.qml
       qml/CollectionsDrawer.qml
+      qml/CustomProviderCard.qml
       qml/HomeView.qml
       qml/LocalDocsSettings.qml
       qml/LocalDocsView.qml

@@ -6,7 +6,10 @@
 #include <QSaveFile>
 #include <QtAssert>
 
+#include <ranges>
 #include <system_error>
+
+namespace views = std::views;
 
 
 namespace gpt4all::ui {
@@ -21,14 +24,7 @@ DataStore<T>::DataStore(std::filesystem::path path)
 }
 
 template <typename T>
-auto DataStore<T>::list() -> tl::generator<const T &>
-{
-    for (auto &[_, value] : m_entries)
-        co_yield value;
-}
-
-template <typename T>
-auto DataStore<T>::createImpl(T data, const QString &name) -> DataStoreResult<const T *>
+auto DataStore<T>::createImpl(T data, const QString &name) -> DataStoreResult<>
 {
     // acquire path
     auto file = openNew(name);
@@ -42,12 +38,7 @@ auto DataStore<T>::createImpl(T data, const QString &name) -> DataStoreResult<co
     // insert
     auto [it, unique] = m_entries.emplace(data.id, std::move(data));
     Q_ASSERT(unique);
-
-    // acquire data ownership
-    if (auto res = acquire(data.id); !res)
-        return std::unexpected(res.error());
-
-    return &it->second;
+    return {};
 }
 
 template <typename T>

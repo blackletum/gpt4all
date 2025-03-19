@@ -8,10 +8,13 @@
 #include <fmt/format.h>
 #include <gpt4all-backend/formatters.h> // IWYU pragma: keep
 
+#include <QtAssert>
 #include <QModelIndex> // IWYU pragma: keep
 #include <QVariant>
 
-namespace fs = std::filesystem;
+#include <algorithm>
+
+namespace ranges = std::ranges;
 
 
 namespace gpt4all::ui {
@@ -43,12 +46,48 @@ QVariant GenerationParams::tryParseValue(QMap<GenerationParam, QVariant> &values
     return value;
 }
 
+ProviderStatus::ProviderStatus(const backend::ResponseError &error)
+    : m_ok(false)
+{
+    auto &code = error.error();
+    if (auto *badStatus = std::get_if<backend::ResponseError::BadStatus>(&code)) {
+        m_detail = QObject::tr("HTTP %1%2%3").arg(
+            QString::number(badStatus->code),
+            badStatus->reason ? u" "_s : QString(),
+            badStatus->reason.value_or(QString())
+        );
+        return;
+    }
+    if (auto *netErr = std::get_if<QNetworkReply::NetworkError>(&code)) {
+        auto meta = QMetaEnum::fromType<QNetworkReply::NetworkError>();
+        m_detail = QString::fromUtf8(meta.valueToKey(*netErr));
+        return;
+    }
+    m_detail = QObject::tr("(unknown error)");
+}
+
+ModelProvider::ModelProvider(protected_t, QUuid id, QString name, QUrl baseUrl) // create built-in or load
+    : m_id(std::move(id)), m_name(std::move(name)), m_baseUrl(std::move(baseUrl))
+{ Q_ASSERT(!m_id.isNull()); }
+
 ModelProvider::~ModelProvider() noexcept = default;
+
+auto ModelProvider::newModel(const QVariant &key) const -> std::shared_ptr<ModelDescription>
+{ return newModelImpl(key); }
 
 ModelProviderMutable::~ModelProviderMutable() noexcept
 {
-    if (auto res = m_store->release(m_id); !res)
-        res.error().raise(); // should not happen - will terminate program
+    if (!m_id.isNull()) // (will be null if constructor throws)
+        if (auto res = m_store->release(m_id); !res)
+            res.error().raise(); // should not happen - will terminate program
+}
+
+auto ModelProviderCustom::persist() -> DataStoreResult<>
+{
+    if (auto res = m_store->create(asData()); !res)
+        return res;
+    m_persisted = true;
+    return {};
 }
 
 ProviderRegistry::ProviderRegistry(PathSet paths)
@@ -70,18 +109,27 @@ ProviderRegistry *ProviderRegistry::globalInstance()
 
 void ProviderRegistry::load()
 {
-    size_t i = 0;
+    auto registerListener = [this](ModelProvider *provider) {
+        // listen for any change in the provider so we can tell the model about it
+        if (auto *mut = dynamic_cast<ModelProviderMutable *>(provider))
+            connect(mut->asQObject(),  "apiKeyChanged",  this, "onProviderChanged");
+        if (auto *cust = dynamic_cast<ModelProviderCustom *>(provider)) {
+            connect(cust->asQObject(), "nameChanged",    this, "onProviderChanged");
+            connect(cust->asQObject(), "baseUrlChanged", this, "onProviderChanged");
+        }
+    };
     for (auto &p : s_builtinProviders) { // (not all builtin providers are stored)
-        auto provider = std::make_shared<OpenaiProviderBuiltin>(
+        auto provider = OpenaiProviderBuiltin::create(
             &m_builtinStore, p.id, p.name, p.icon, p.base_url,
-            QStringList(p.model_whitelist.begin(), p.model_whitelist.end())
+            std::unordered_set<QString>(p.model_whitelist.begin(), p.model_whitelist.end())
         );
-        auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
+        auto [it, unique] = m_providers.emplace(p.id, std::move(provider));
         if (!unique)
             throw std::logic_error(fmt::format("duplicate builtin provider id: {}", p.id.toString()));
-        m_builtinProviders[i++] = p.id;
+        m_providerList.push_back(&p.id);
+        registerListener(it->second.get());
     }
-    for (auto &p : m_customStore.list()) { // disk is source of truth for custom providers
+    for (auto p : m_customStore.list()) { // disk is source of truth for custom providers
         if (!p.custom_details) {
             qWarning() << "ignoring builtin provider in custom store:" << p.id;
             continue;
@@ -91,54 +139,62 @@ void ProviderRegistry::load()
         switch (p.type()) {
             using enum ProviderType;
         case ollama:
-            provider = std::make_shared<OllamaProviderCustom>(
+            provider = OllamaProviderCustom::create(
                 &m_customStore, p.id, cust.name, cust.base_url
             );
             break;
         case openai:
-            provider = std::make_shared<OpenaiProviderCustom>(
+            provider = OpenaiProviderCustom::create(
                 &m_customStore, p.id, cust.name, cust.base_url,
                 std::get<size_t(ProviderType::openai)>(p.provider_details).api_key
             );
         }
-        auto [_, unique] = m_providers.emplace(p.id, std::move(provider));
+        auto [it, unique] = m_providers.emplace(p.id, std::move(provider));
         if (!unique)
             qWarning() << "ignoring duplicate custom provider with id:" << p.id;
-        m_customProviders.push_back(std::make_unique<QUuid>(p.id));
+        m_providerList.push_back(&it->second->id());
+        registerListener(it->second.get());
     }
 }
 
-[[nodiscard]]
-bool ProviderRegistry::add(std::shared_ptr<ModelProviderCustom> provider)
+auto ProviderRegistry::add(std::shared_ptr<ModelProviderCustom> provider) -> DataStoreResult<>
 {
+    if (auto res = provider->persist(); !res)
+        return res;
     auto [it, unique] = m_providers.emplace(provider->id(), std::move(provider));
-    if (unique) {
-        m_customProviders.push_back(std::make_unique<QUuid>(it->first));
-        emit customProviderAdded(m_customProviders.size() - 1);
+    if (!unique)
+        return std::unexpected(u"custom provider already registered: %1"_s.arg(provider->id().toString()));
+    m_providerList.push_back(&it->second->id());
+    emit customProviderAdded(m_providerList.size() - 1);
+    return {};
+}
+
+bool ProviderRegistry::addQml(QmlSharedPtr *provider)
+{
+    auto obj = std::dynamic_pointer_cast<ModelProviderCustom>(provider->ptr());
+    if (!obj) {
+        qWarning() << "ProviderRegistry::add failed: Expected ModelProviderCustom, got"
+                   << provider->metaObject()->className();
+        return false;
     }
-    return unique;
+    auto res = add(obj);
+    if (!res)
+        qWarning() << "ProviderRegistry::add failed:" << res.error().errorString();
+    return bool(res);
 }
 
-auto ProviderRegistry::customProviderAt(size_t i) const -> ModelProviderCustom *
+auto ProviderRegistry::providerAt(size_t i) const -> const ModelProvider *
 {
-    auto it = m_providers.find(*m_customProviders.at(i));
+    auto it = m_providers.find(*m_providerList.at(i));
     Q_ASSERT(it != m_providers.end());
-    return &dynamic_cast<ModelProviderCustom &>(*it->second);
-}
-
-auto ProviderRegistry::builtinProviderAt(size_t i) const -> ModelProviderBuiltin *
-{
-    auto it = m_providers.find(m_builtinProviders.at(i));
-    Q_ASSERT(it != m_providers.end());
-    return &dynamic_cast<ModelProviderBuiltin &>(*it->second);
-
+    return it->second.get();
 }
 
 auto ProviderRegistry::getSubdirs() -> PathSet
 {
     auto *mysettings = MySettings::globalInstance();
     auto parent = toFSPath(mysettings->modelPath()) / "providers";
-    return { .builtin = parent, .custom  = parent / "custom" };
+    return { .builtin = parent, .custom = parent / "custom" };
 }
 
 void ProviderRegistry::onModelPathChanged()
@@ -147,8 +203,8 @@ void ProviderRegistry::onModelPathChanged()
     if (paths.builtin != m_builtinStore.path()) {
         emit aboutToBeCleared();
         // delete providers to release store locks
-        m_customProviders.clear();
         m_providers.clear();
+        m_providerList.clear();
         if (auto res = m_builtinStore.setPath(paths.builtin); !res)
             res.error().raise(); // should not happen
         if (auto res = m_customStore.setPath(paths.custom); !res)
@@ -157,42 +213,58 @@ void ProviderRegistry::onModelPathChanged()
     }
 }
 
-auto BuiltinProviderList::roleNames() const -> QHash<int, QByteArray>
-{ return { { Qt::DisplayRole, "data"_ba } }; }
-
-QVariant BuiltinProviderList::data(const QModelIndex &index, int role) const
+void ProviderRegistry::onProviderChanged()
 {
-    auto *registry = ProviderRegistry::globalInstance();
-    if (index.isValid() && index.row() < rowCount() && role == Qt::DisplayRole)
-        return QVariant::fromValue(registry->builtinProviderAt(index.row())->asQObject());
-    return {};
+    // notify that this provider has changed
+    auto *obj = &dynamic_cast<ModelProvider &>(*QObject::sender());
+    auto it = ranges::find_if(m_providerList, [&](auto *id) { return *id == obj->id(); });
+    if (it < m_providerList.end())
+        emit customProviderChanged(it - m_providerList.begin());
 }
 
-CustomProviderList::CustomProviderList()
-    : m_size(ProviderRegistry::globalInstance()->customProviderCount())
+ProviderList::ProviderList()
+    : m_size(ProviderRegistry::globalInstance()->providerCount())
 {
     auto *registry = ProviderRegistry::globalInstance();
-    connect(registry, &ProviderRegistry::customProviderAdded, this, &CustomProviderList::onCustomProviderAdded);
-    connect(registry, &ProviderRegistry::aboutToBeCleared, this, &CustomProviderList::onAboutToBeCleared,
+    connect(registry, &ProviderRegistry::customProviderAdded, this, &ProviderList::onCustomProviderAdded);
+    connect(registry, &ProviderRegistry::customProviderRemoved, this, &ProviderList::onCustomProviderRemoved);
+    connect(registry, &ProviderRegistry::customProviderChanged, this, &ProviderList::onCustomProviderChanged);
+    connect(registry, &ProviderRegistry::aboutToBeCleared, this, &ProviderList::onAboutToBeCleared,
             Qt::DirectConnection);
 }
 
-QVariant CustomProviderList::data(const QModelIndex &index, int role) const
+auto ProviderList::roleNames() const -> QHash<int, QByteArray>
+{ return { { Qt::DisplayRole, "provider"_ba } }; }
+
+QVariant ProviderList::data(const QModelIndex &index, int role) const
 {
     auto *registry = ProviderRegistry::globalInstance();
     if (index.isValid() && index.row() < rowCount() && role == Qt::DisplayRole)
-        return QVariant::fromValue(registry->customProviderAt(index.row())->asQObject());
+        return QVariant::fromValue(registry->providerAt(index.row())->asQObject());
     return {};
 }
 
-void CustomProviderList::onCustomProviderAdded(size_t index)
+void ProviderList::onCustomProviderAdded(size_t index)
 {
-    beginInsertRows({}, m_size, m_size);
+    beginInsertRows({}, index, index);
     m_size++;
     endInsertRows();
 }
 
-void CustomProviderList::onAboutToBeCleared()
+void ProviderList::onCustomProviderRemoved(size_t index)
+{
+    beginRemoveRows({}, index, index);
+    m_size--;
+    endRemoveRows();
+}
+
+void ProviderList::onCustomProviderChanged(size_t index)
+{
+    auto i = this->index(index);
+    emit dataChanged(i, i);
+}
+
+void ProviderList::onAboutToBeCleared()
 {
     beginResetModel();
     m_size = 0;
@@ -203,8 +275,13 @@ bool ProviderListSort::lessThan(const QModelIndex &left, const QModelIndex &righ
 {
     auto *leftData  = sourceModel()->data(left ).value<ModelProvider *>();
     auto *rightData = sourceModel()->data(right).value<ModelProvider *>();
-    if (leftData && rightData)
-        return QString::localeAwareCompare(leftData->name(), rightData->name()) < 0;
+    if (leftData && rightData) {
+        if (leftData->isBuiltin() != rightData->isBuiltin())
+            return leftData->isBuiltin() > rightData->isBuiltin(); // builtins first
+        if (leftData->isBuiltin())
+            return left.row() < right.row(); // preserve order of builtins
+        return QString::localeAwareCompare(leftData->name(), rightData->name()) < 0; // sort by name
+    }
     return true;
 }
 

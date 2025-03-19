@@ -178,9 +178,9 @@ MySettings::MySettings()
 {
 }
 
-const QString &MySettings::userAgent()
+const QByteArray &MySettings::userAgent()
 {
-    static const QString s_userAgent = QStringLiteral("gpt4all/" APP_VERSION);
+    static const QByteArray s_userAgent = QByteArrayLiteral("gpt4all/" APP_VERSION);
     return s_userAgent;
 }
 

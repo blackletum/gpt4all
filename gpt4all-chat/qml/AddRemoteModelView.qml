@@ -49,15 +49,13 @@ ColumnLayout {
             property int childWidth: 330 * theme.fontScale
             property int childHeight: 400 + 166 * theme.fontScale
             Repeater {
-                model: BuiltinProviderList
-                delegate: RemoteModelCard {
-                    required property var data
+                model: ProviderListSort
+                RemoteModelCard {
                     width: parent.childWidth
                     height: parent.childHeight
-                    provider: data
-                    providerBaseUrl: data.baseUrl
-                    providerName: data.name
-                    providerImage: data.icon
+                    provider: modelData
+                    providerName: provider.name
+                    providerImage: provider.icon
                     providerDesc: ({
                         '{20f963dc-1f99-441e-ad80-f30a0a06bcac}': qsTr(
                             'Groq offers a high-performance AI inference engine designed for low-latency and ' +
@@ -78,10 +76,18 @@ ColumnLayout {
                             'performance, making them a solid option for applications requiring scalable AI ' +
                             'solutions.<br><br>Get your API key: <a href="https://mistral.ai/">https://mistral.ai/</a>'
                         ),
-                    })[data.id.toString()]
-                    modelWhitelist: data.modelWhitelist
+                    })[provider.id.toString()]
                 }
             }
+            RemoteModelCard {
+                width: parent.childWidth
+                height: parent.childHeight
+                providerUsesApiKey: false
+                providerName: qsTr("Ollama (Custom)")
+                providerImage: "qrc:/gpt4all/icons/antenna_3.svg"
+                providerDesc: qsTr("Configure a custom Ollama provider.")
+            }
+            // TODO(jared): add custom openai back to the list
             /*
             RemoteModelCard {
                 width: parent.childWidth

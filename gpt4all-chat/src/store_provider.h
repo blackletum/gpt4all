@@ -49,10 +49,7 @@ private:
 public:
     using Super::Super;
 
-    /// OpenAI
-    auto create(QString name, QUrl base_url, QString api_key) -> DataStoreResult<const ModelProviderData *>;
-    /// Ollama
-    auto create(QString name, QUrl base_url) -> DataStoreResult<const ModelProviderData *>;
+    auto create(ModelProviderData data) -> DataStoreResult<>;
 };
 
 

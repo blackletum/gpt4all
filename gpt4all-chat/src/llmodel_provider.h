@@ -2,23 +2,29 @@
 
 #include "store_provider.h"
 
+#include "qmlsharedptr.h" // IWYU pragma: keep
 #include "utils.h" // IWYU pragma: keep
+
+#include <gpt4all-backend/ollama-client.h>
 
 #include <QAbstractListModel>
 #include <QObject>
 #include <QQmlEngine> // IWYU pragma: keep
 #include <QSortFilterProxyModel>
 #include <QString>
+#include <QStringList> // IWYU pragma: keep
 #include <QUrl>
 #include <QUuid>
 #include <QtPreprocessorSupport>
 
 #include <array>
 #include <cstddef>
+#include <expected>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -26,12 +32,40 @@
 class QByteArray;
 class QJSEngine;
 template <typename Key, typename T> class QHash;
+namespace QCoro {
+    template <typename T> class Task;
+    struct QmlTask;
+}
 
 
 namespace gpt4all::ui {
 
 
 Q_NAMESPACE
+
+class ModelDescription;
+
+namespace detail {
+
+template <typename T>
+struct is_expected_impl : std::false_type {};
+
+template <typename T, typename E>
+struct is_expected_impl<std::expected<T, E>> : std::true_type {};
+
+template <typename T>
+concept is_expected = is_expected_impl<std::remove_cvref_t<T>>::value;
+
+} // namespace detail
+
+/// Drop the type and error information from a QCoro::Task<DataOrRespErr<T>> so it can be used by QML.
+template <typename C, typename F, typename... Args>
+    requires (!detail::is_expected<typename std::invoke_result_t<F, C *, Args...>::value_type>)
+QCoro::QmlTask wrapQmlTask(std::shared_ptr<C> c, F f, QString prefix, Args &&...args);
+
+template <typename C, typename F, typename... Args>
+    requires detail::is_expected<typename std::invoke_result_t<F, C *, Args...>::value_type>
+QCoro::QmlTask wrapQmlTask(std::shared_ptr<C> c, F f, QString prefix, Args &&...args);
 
 enum class GenerationParam  {
     NPredict,
@@ -61,18 +95,36 @@ protected:
     void tryParseValue(this S &self, QMap<GenerationParam, QVariant> &values, GenerationParam key, T C::* dest);
 };
 
-class ModelProvider {
+class ProviderStatus {
+    Q_GADGET
+    Q_PROPERTY(bool    ok     READ ok     CONSTANT)
+    Q_PROPERTY(QString detail READ detail CONSTANT)
+
+public:
+    explicit ProviderStatus(QString okMsg): m_ok(true), m_detail(std::move(okMsg)) {}
+    explicit ProviderStatus(const backend::ResponseError &error);
+
+    bool           ok    () const { return m_ok;     }
+    const QString &detail() const { return m_detail; }
+
+private:
+    bool    m_ok;
+    QString m_detail;
+};
+
+class ModelProvider : public std::enable_shared_from_this<ModelProvider> {
 protected:
-    explicit ModelProvider(QUuid id, QString name, QUrl baseUrl) // create built-in or load
-        : m_id(std::move(id)), m_name(std::move(name)), m_baseUrl(std::move(baseUrl)) {}
-    explicit ModelProvider(QString name, QUrl baseUrl) // create custom
-        : m_name(std::move(name)), m_baseUrl(std::move(baseUrl)) {}
+    struct protected_t { explicit protected_t() = default; };
+
+    explicit ModelProvider(protected_t, QUuid id, QString name, QUrl baseUrl);
 
 public:
     virtual ~ModelProvider() noexcept = 0;
 
     virtual       QObject *asQObject() = 0;
     virtual const QObject *asQObject() const = 0;
+
+    virtual bool isBuiltin() const = 0;
 
     // getters
     [[nodiscard]] const QUuid   &id     () const { return m_id;      }
@@ -82,13 +134,24 @@ public:
     virtual auto supportedGenerationParams() const -> QSet<GenerationParam> = 0;
     virtual auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> GenerationParams * = 0;
 
+    // endpoints
+    virtual auto status    () -> QCoro::Task<ProviderStatus                     > = 0;
+    virtual auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> = 0;
+
+    /// create a model using this provider
+    [[nodiscard]] auto newModel(const QVariant &key) const -> std::shared_ptr<ModelDescription>;
+
     friend bool operator==(const ModelProvider &a, const ModelProvider &b)
     { return a.m_id == b.m_id; }
 
 protected:
+    [[nodiscard]] virtual auto newModelImpl(const QVariant &key) const -> std::shared_ptr<ModelDescription> = 0;
+
     QUuid   m_id;
     QString m_name;
     QUrl    m_baseUrl;
+
+    template <typename T> friend struct Creatable;
 };
 
 class ModelProviderBuiltin : public virtual ModelProvider {
@@ -97,6 +160,8 @@ protected:
         : m_icon(std::move(icon)) {}
 
 public:
+    bool isBuiltin() const final { return true; }
+
     [[nodiscard]] const QUrl &icon() const { return m_icon; }
 
 protected:
@@ -119,6 +184,8 @@ protected:
     [[nodiscard]] DataStoreResult<> setMemberProp(this S &self, T C::* member, std::string_view name, T value,
                                                   std::optional<QString> createName = {});
 
+    [[nodiscard]] virtual bool persisted() const { return true; }
+
     ProviderStore *m_store;
 };
 
@@ -128,11 +195,20 @@ protected:
         : ModelProviderMutable(store) {}
 
 public:
+    bool isBuiltin() const final { return false; }
+
     // setters
     [[nodiscard]] DataStoreResult<> setName   (QString value)
     { return setMemberProp<QString>(&ModelProviderCustom::m_name,    "name",    std::move(value)); }
     [[nodiscard]] DataStoreResult<> setBaseUrl(QUrl    value)
     { return setMemberProp<QUrl   >(&ModelProviderCustom::m_baseUrl, "baseUrl", std::move(value)); }
+
+    [[nodiscard]] auto persist() -> DataStoreResult<>;
+
+protected:
+    [[nodiscard]] bool persisted() const override { return m_persisted; }
+
+    bool m_persisted = false;
 };
 
 class ProviderRegistry : public QObject {
@@ -156,17 +232,21 @@ protected:
 public:
     static ProviderRegistry *globalInstance();
 
-    [[nodiscard]] bool add(std::shared_ptr<ModelProviderCustom> provider);
+    [[nodiscard]] auto add(std::shared_ptr<ModelProviderCustom> provider) -> DataStoreResult<>;
+    Q_INVOKABLE bool addQml(QmlSharedPtr *provider);
+
+    // TODO(jared): implement a way to remove custom providers via the model
 
     auto operator[](const QUuid &id) -> const ModelProvider * { return m_providers.at(id).get(); }
-    // TODO(jared): implement a way to remove custom providers via the model
-    [[nodiscard]] size_t customProviderCount ()         const { return m_customProviders.size(); }
-    [[nodiscard]] auto   customProviderAt    (size_t i) const -> ModelProviderCustom *;
-    [[nodiscard]] size_t builtinProviderCount()         const { return m_builtinProviders.size(); }
-    [[nodiscard]] auto   builtinProviderAt   (size_t i) const -> ModelProviderBuiltin *;
+    [[nodiscard]] size_t providerCount() const { return m_providers.size(); }
+    [[nodiscard]] auto   providerAt(size_t i) const -> const ModelProvider *;
+
+    ProviderStore *customStore() { return &m_customStore; }
 
 Q_SIGNALS:
     void customProviderAdded(size_t index);
+    void customProviderRemoved(size_t index); // TODO: use
+    void customProviderChanged(size_t index);
     void aboutToBeCleared();
 
 private:
@@ -175,6 +255,7 @@ private:
 
 private Q_SLOTS:
     void onModelPathChanged();
+    void onProviderChanged();
 
 private:
     static constexpr size_t N_BUILTIN = 3;
@@ -183,51 +264,32 @@ private:
     ProviderStore                                             m_customStore;
     ProviderStore                                             m_builtinStore;
     std::unordered_map<QUuid, std::shared_ptr<ModelProvider>> m_providers;
-    std::vector<std::unique_ptr<QUuid>>                       m_customProviders;
-    std::array<QUuid, N_BUILTIN>                              m_builtinProviders;
+    std::vector<const QUuid *>                                m_providerList; // TODO: implement
 };
 
-// TODO: api keys are allowed to change for here and also below. That should emit dataChanged.
-class BuiltinProviderList : public QAbstractListModel {
+class ProviderList : public QAbstractListModel {
     Q_OBJECT
-    QML_SINGLETON
-    QML_ELEMENT
 
 public:
-    explicit BuiltinProviderList()
-        : m_size(ProviderRegistry::globalInstance()->builtinProviderCount()) {}
+    explicit ProviderList();
 
-    static BuiltinProviderList *create(QQmlEngine *, QJSEngine *) { return new BuiltinProviderList(); }
+    static ProviderList *create(QQmlEngine *, QJSEngine *) { return new ProviderList(); }
 
     auto roleNames() const -> QHash<int, QByteArray> override;
     int rowCount(const QModelIndex &parent = {}) const override
     { Q_UNUSED(parent) return int(m_size); }
     QVariant data(const QModelIndex &index, int role) const override;
 
-private:
-    size_t m_size;
-};
-
-class CustomProviderList : public QAbstractListModel {
-    Q_OBJECT
-
-public:
-    explicit CustomProviderList();
-
-    int rowCount(const QModelIndex &parent = {}) const override
-    { Q_UNUSED(parent) return int(m_size); }
-    QVariant data(const QModelIndex &index, int role) const override;
-
 private Q_SLOTS:
-    void onCustomProviderAdded(size_t index);
+    void onCustomProviderAdded  (size_t index);
+    void onCustomProviderRemoved(size_t index);
+    void onCustomProviderChanged(size_t index);
     void onAboutToBeCleared();
 
 private:
     size_t m_size;
 };
 
-// todo: don't have singletons use singletons directly
-// TODO: actually use the provider sort, here, rather than unsorted, for builtins
 class ProviderListSort : public QSortFilterProxyModel {
     Q_OBJECT
     QML_SINGLETON
@@ -243,8 +305,7 @@ protected:
     bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
 
 private:
-    // TODO: support custom providers as well
-    BuiltinProviderList m_model;
+    ProviderList m_model;
 };
 
 
