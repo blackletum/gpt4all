@@ -70,20 +70,19 @@ public:
 protected:
     auto reload() -> DataStoreResult<>;
     virtual auto clear() -> DataStoreResult<> = 0;
-    struct CacheInsertResult { bool unique; QUuid uuid; };
-    virtual CacheInsertResult cacheInsert(const boost::json::value &jv) = 0;
+    struct CacheInsertResult { bool unique; QUuid id; };
+    virtual CacheInsertResult cacheInsert(const std::filesystem::path &stem, const boost::json::value &jv) = 0;
 
     // helpers
-    auto getFilePath(const QString &name) -> std::filesystem::path;
-    auto openNew(const QString &name) -> DataStoreResult<std::unique_ptr<QFile>>;
-    auto openExisting(const QString &name, bool allowCreate = false) -> DataStoreResult<std::unique_ptr<QSaveFile>>;
+    static QByteArray normalizeName(const QString &name);
+    auto getFilePath(const QByteArray &normName) -> std::filesystem::path;
+    auto openNew(const QByteArray &normName) -> DataStoreResult<std::unique_ptr<QFile>>;
+    auto openExisting(const QByteArray &normName, bool allowCreate = false) -> DataStoreResult<std::unique_ptr<QSaveFile>>;
     static auto read(QFileDevice &file, boost::json::stream_parser &parser) -> DataStoreResult<boost::json::value>;
     auto write(const boost::json::value &value, QFileDevice &file) -> DataStoreResult<>;
 
 private:
     static constexpr uint JSON_BUFSIZ = 16384; // default QFILE_WRITEBUFFER_SIZE
-
-    static QByteArray normalizeName(const QString &name);
 
 protected:
     std::filesystem::path m_path;
@@ -98,7 +97,7 @@ public:
     explicit DataStore(std::filesystem::path path);
 
     auto list() { return m_entries | std::views::transform([](auto &e) { return e.second; }); }
-    auto setData(T data, std::optional<QString> createName = {}) -> DataStoreResult<>;
+    auto setData(T data, const QString &name, bool create = false) -> DataStoreResult<>;
     auto remove(const QUuid &id) -> DataStoreResult<>;
 
     auto acquire(QUuid        id) -> DataStoreResult<std::optional<const T *>>;
@@ -112,12 +111,13 @@ public:
 protected:
     auto createImpl(T data, const QString &name) -> DataStoreResult<>;
     auto clear() -> DataStoreResult<> final;
-    CacheInsertResult cacheInsert(const boost::json::value &jv) override;
+    CacheInsertResult cacheInsert(const std::filesystem::path &stem, const boost::json::value &jv) override;
 
 private:
-    std::unordered_map<QUuid, T>       m_entries;
-    std::unordered_set<QUuid>          m_acquired;
-    std::unordered_map<QUuid, QString> m_names;
+    std::unordered_map<QUuid,      T         > m_entries;
+    std::unordered_map<QUuid,      QByteArray> m_normNames;
+    std::unordered_map<QByteArray, QUuid     > m_normNameToId;
+    std::unordered_set<QUuid>                  m_acquired;
 };
 
 

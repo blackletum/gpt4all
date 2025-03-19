@@ -38,6 +38,14 @@ QCoro::QmlTask wrapQmlTask(C *obj, F f, QString prefix, Args &&...args)
     }(std::move(ptr), std::move(f), std::move(prefix), std::forward<Args>(args)...);
 }
 
+template <typename C, typename F, typename... Args>
+bool wrapQmlFunc(C *obj, F &&f, QStringView prefix, Args &&...args)
+{
+    auto res = std::invoke(std::forward<F>(f), obj, std::forward<Args>(args)...);
+    if (!res) { qWarning().noquote() << prefix << "failed:" << res.error().errorString(); }
+    return bool(res);
+}
+
 template <typename T, typename S, typename C>
 void GenerationParams::tryParseValue(this S &self, QMap<GenerationParam, QVariant> &values, GenerationParam key,
                                      T C::* dest)
@@ -48,15 +56,15 @@ void GenerationParams::tryParseValue(this S &self, QMap<GenerationParam, QVarian
 
 template <typename T, typename S, typename C>
 auto ModelProviderMutable::setMemberProp(this S &self, T C::* member, std::string_view name, T value,
-                                         std::optional<QString> createName) -> DataStoreResult<>
+                                         bool create) -> DataStoreResult<>
 {
-    auto &mpc = static_cast<ModelProviderMutable &>(self);
+    auto &mpm = static_cast<ModelProviderMutable &>(self);
     auto &cur = self.*member;
     if (cur != value) {
         cur = std::move(value);
-        if (mpc.persisted()) {
-            auto data = mpc.asData();
-            if (auto res = mpc.m_store->setData(std::move(data), createName); !res)
+        if (mpm.persisted()) {
+            auto data = mpm.asData();
+            if (auto res = mpm.m_store->setData(std::move(data), mpm.name(), create); !res)
                 return res;
         }
         QMetaObject::invokeMethod(self.asQObject(), fmt::format("{}Changed", name).c_str(), cur);

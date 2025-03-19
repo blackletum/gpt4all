@@ -79,25 +79,6 @@ ColumnLayout {
                     })[provider.id.toString()]
                 }
             }
-            RemoteModelCard {
-                width: parent.childWidth
-                height: parent.childHeight
-                providerUsesApiKey: false
-                providerName: qsTr("Ollama (Custom)")
-                providerImage: "qrc:/gpt4all/icons/antenna_3.svg"
-                providerDesc: qsTr("Configure a custom Ollama provider.")
-            }
-            // TODO(jared): add custom openai back to the list
-            /*
-            RemoteModelCard {
-                width: parent.childWidth
-                height: parent.childHeight
-                providerIsCustom: true
-                providerName: qsTr("Custom")
-                providerImage: "qrc:/gpt4all/icons/antenna_3.svg"
-                providerDesc: qsTr("The custom provider option allows users to connect their own OpenAI-compatible AI models or third-party inference services. This is useful for organizations with proprietary models or those leveraging niche AI providers not listed here.")
-            }
-            */
         }
     }
 }

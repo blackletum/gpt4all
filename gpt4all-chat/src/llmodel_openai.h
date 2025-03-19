@@ -50,8 +50,9 @@ protected:
 
 class OpenaiProvider : public QObject, public virtual ModelProvider {
     Q_OBJECT
-    Q_PROPERTY(QUuid   id     READ id     CONSTANT            )
-    Q_PROPERTY(QString apiKey READ apiKey NOTIFY apiKeyChanged)
+    Q_PROPERTY(QUuid   id        READ id        CONSTANT            )
+    Q_PROPERTY(QString apiKey    READ apiKey    NOTIFY apiKeyChanged)
+    Q_PROPERTY(bool    isBuiltin READ isBuiltin CONSTANT            )
 
 protected:
     explicit OpenaiProvider();
@@ -66,7 +67,8 @@ public:
     [[nodiscard]] const QString &apiKey() const { return m_apiKey; }
 
     [[nodiscard]] virtual DataStoreResult<> setApiKey(QString value) = 0;
-    Q_INVOKABLE bool setApiKeyQml(QString value);
+    Q_INVOKABLE bool setApiKeyQml(QString value)
+    { return wrapQmlFunc(this, &OpenaiProvider::setApiKey, u"setApiKey", std::move(value)); }
 
     auto supportedGenerationParams() const -> QSet<GenerationParam> override;
     auto makeGenerationParams(const QMap<GenerationParam, QVariant> &values) const -> OpenaiGenerationParams * override;
@@ -107,7 +109,7 @@ public:
                                    std::unordered_set<QString> modelWhitelist);
 
     [[nodiscard]] DataStoreResult<> setApiKey(QString value) override
-    { return setMemberProp<QString>(&OpenaiProviderBuiltin::m_apiKey, "apiKey", std::move(value), /*createName*/ m_name); }
+    { return setMemberProp<QString>(&OpenaiProviderBuiltin::m_apiKey, "apiKey", std::move(value), /*create*/ true); }
 
     // override for model whitelist
     auto listModels() -> QCoro::Task<backend::DataOrRespErr<QStringList>> override;

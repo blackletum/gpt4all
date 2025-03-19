@@ -61,11 +61,15 @@ concept is_expected = is_expected_impl<std::remove_cvref_t<T>>::value;
 /// Drop the type and error information from a QCoro::Task<DataOrRespErr<T>> so it can be used by QML.
 template <typename C, typename F, typename... Args>
     requires (!detail::is_expected<typename std::invoke_result_t<F, C *, Args...>::value_type>)
-QCoro::QmlTask wrapQmlTask(std::shared_ptr<C> c, F f, QString prefix, Args &&...args);
+QCoro::QmlTask wrapQmlTask(C *obj, F f, QString prefix, Args &&...args);
 
 template <typename C, typename F, typename... Args>
     requires detail::is_expected<typename std::invoke_result_t<F, C *, Args...>::value_type>
-QCoro::QmlTask wrapQmlTask(std::shared_ptr<C> c, F f, QString prefix, Args &&...args);
+QCoro::QmlTask wrapQmlTask(C *obj, F f, QString prefix, Args &&...args);
+
+/// Drop the error information from a DataOrRespErr<T> so it can be used by QML.
+template <typename C, typename F, typename... Args>
+bool wrapQmlFunc(C *obj, F &&f, QStringView prefix, Args &&...args);
 
 enum class GenerationParam  {
     NPredict,
@@ -182,7 +186,7 @@ protected:
 
     template <typename T, typename S, typename C>
     [[nodiscard]] DataStoreResult<> setMemberProp(this S &self, T C::* member, std::string_view name, T value,
-                                                  std::optional<QString> createName = {});
+                                                  bool create = false);
 
     [[nodiscard]] virtual bool persisted() const { return true; }
 
@@ -198,10 +202,15 @@ public:
     bool isBuiltin() const final { return false; }
 
     // setters
-    [[nodiscard]] DataStoreResult<> setName   (QString value)
-    { return setMemberProp<QString>(&ModelProviderCustom::m_name,    "name",    std::move(value)); }
+    [[nodiscard]] DataStoreResult<> setName   (QString value);
     [[nodiscard]] DataStoreResult<> setBaseUrl(QUrl    value)
     { return setMemberProp<QUrl   >(&ModelProviderCustom::m_baseUrl, "baseUrl", std::move(value)); }
+
+    // QML setters
+    Q_INVOKABLE bool setNameQml   (QString value)
+    { return wrapQmlFunc(this, &ModelProviderCustom::setName,    u"setName",    std::move(value)); }
+    Q_INVOKABLE bool setBaseUrlQml(QString value)
+    { return wrapQmlFunc(this, &ModelProviderCustom::setBaseUrl, u"setBaseUrl", std::move(value)); }
 
     [[nodiscard]] auto persist() -> DataStoreResult<>;
 
@@ -264,7 +273,7 @@ private:
     ProviderStore                                             m_customStore;
     ProviderStore                                             m_builtinStore;
     std::unordered_map<QUuid, std::shared_ptr<ModelProvider>> m_providers;
-    std::vector<const QUuid *>                                m_providerList; // TODO: implement
+    std::vector<const QUuid *>                                m_providerList;
 };
 
 class ProviderList : public QAbstractListModel {
@@ -296,7 +305,7 @@ class ProviderListSort : public QSortFilterProxyModel {
     QML_ELEMENT
 
 private:
-    explicit ProviderListSort() { setSourceModel(&m_model); }
+    explicit ProviderListSort() { setSourceModel(&m_model); sort(0); }
 
 public:
     static ProviderListSort *create(QQmlEngine *, QJSEngine *) { return new ProviderListSort(); }

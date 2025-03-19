@@ -46,7 +46,8 @@ protected:
 
 class OllamaProvider : public QObject, public virtual ModelProvider {
     Q_OBJECT
-    Q_PROPERTY(QUuid id READ id CONSTANT)
+    Q_PROPERTY(QUuid id        READ id        CONSTANT)
+    Q_PROPERTY(bool  isBuiltin READ isBuiltin CONSTANT)
 
 protected:
     explicit OllamaProvider();

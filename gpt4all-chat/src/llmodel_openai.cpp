@@ -98,14 +98,6 @@ OpenaiProvider::OpenaiProvider(QString apiKey)
 
 OpenaiProvider::~OpenaiProvider() noexcept = default;
 
-Q_INVOKABLE bool OpenaiProvider::setApiKeyQml(QString value)
-{
-    auto res = setApiKey(std::move(value));
-    if (!res)
-        qWarning().noquote() << "setApiKey failed:" << res.error().errorString();
-    return bool(res);
-}
-
 auto OpenaiProvider::supportedGenerationParams() const -> QSet<GenerationParam>
 {
     using enum GenerationParam;

@@ -82,7 +82,7 @@ auto DataStoreBase::reload() -> DataStoreResult<>
     }
 
     for (auto &entry : it) {
-        if (!entry.is_regular_file())
+        if (!entry.is_regular_file() || entry.path().extension() != ".json")
             continue; // skip directories and such
         file.setFileName(entry.path());
         if (!file.open(QFile::ReadOnly)) {
@@ -93,7 +93,7 @@ auto DataStoreBase::reload() -> DataStoreResult<>
         if (!jv) {
             (qWarning().nospace() << "skipping " << file.fileName() << " because of read error: ").noquote()
                 << jv.error().errorString();
-        } else if (auto [unique, uuid] = cacheInsert(*jv); !unique)
+        } else if (auto [unique, uuid] = cacheInsert(entry.path().stem(), *jv); !unique)
             qWarning() << "skipping duplicate data store entry:" << uuid;
         file.close();
     }
@@ -109,12 +109,23 @@ auto DataStoreBase::setPath(fs::path path) -> DataStoreResult<>
     return {};
 }
 
-auto DataStoreBase::getFilePath(const QString &name) -> fs::path
-{ return m_path / fmt::format("{}.json", QLatin1StringView(normalizeName(name))); }
-
-auto DataStoreBase::openNew(const QString &name) -> DataStoreResult<std::unique_ptr<QFile>>
+QByteArray DataStoreBase::normalizeName(const QString &name)
 {
-    auto path = getFilePath(name);
+    auto lower = name.toLower();
+    auto norm = QUrl::toPercentEncoding(lower, /*exclude*/ " !#$%&'()+,;=@[]^`{}"_ba, /*include*/ "~"_ba);
+
+    // leading dot indicates a hidden file on Unix
+    if (norm.startsWith('.'))
+        norm = "%2E"_ba.append(QByteArrayView(norm).slice(1));
+    return norm;
+}
+
+auto DataStoreBase::getFilePath(const QByteArray &normName) -> fs::path
+{ return m_path / fmt::format("{}.json", QLatin1StringView(normName)); }
+
+auto DataStoreBase::openNew(const QByteArray &normName) -> DataStoreResult<std::unique_ptr<QFile>>
+{
+    auto path = getFilePath(normName);
     auto file = std::make_unique<QFile>(path);
     if (file->exists())
         return std::unexpected(sys::system_error(std::make_error_code(std::errc::file_exists), path.string()));
@@ -123,9 +134,9 @@ auto DataStoreBase::openNew(const QString &name) -> DataStoreResult<std::unique_
     return file;
 }
 
-auto DataStoreBase::openExisting(const QString &name, bool allowCreate) -> DataStoreResult<std::unique_ptr<QSaveFile>>
+auto DataStoreBase::openExisting(const QByteArray &normName, bool allowCreate) -> DataStoreResult<std::unique_ptr<QSaveFile>>
 {
-    auto path = getFilePath(name);
+    auto path = getFilePath(normName);
     if (!allowCreate && !QFile::exists(path))
         return std::unexpected(sys::system_error(
             std::make_error_code(std::errc::no_such_file_or_directory), path.string()
@@ -211,17 +222,6 @@ auto DataStoreBase::write(const json::value &value, QFileDevice &file) -> DataSt
         return std::unexpected(&file);
 
     return {};
-}
-
-QByteArray DataStoreBase::normalizeName(const QString &name)
-{
-    auto lower = name.toLower();
-    auto norm = QUrl::toPercentEncoding(lower, /*exclude*/ " !#$%&'()+,;=@[]^`{}"_ba, /*include*/ "~"_ba);
-
-    // "." and ".." are special filenames
-    return norm == "."_ba  ? "%2E"_ba    :
-           norm == ".."_ba ? "%2E%2E"_ba :
-           norm;
 }
 
 

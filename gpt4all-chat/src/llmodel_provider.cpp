@@ -82,6 +82,13 @@ ModelProviderMutable::~ModelProviderMutable() noexcept
             res.error().raise(); // should not happen - will terminate program
 }
 
+DataStoreResult<> ModelProviderCustom::setName(QString value)
+{
+    if (value.isEmpty())
+        return std::unexpected(u"name cannot be empty"_s);
+    return setMemberProp<QString>(&ModelProviderCustom::m_name, "name", std::move(value));
+}
+
 auto ModelProviderCustom::persist() -> DataStoreResult<>
 {
     if (auto res = m_store->create(asData()); !res)
@@ -112,10 +119,10 @@ void ProviderRegistry::load()
     auto registerListener = [this](ModelProvider *provider) {
         // listen for any change in the provider so we can tell the model about it
         if (auto *mut = dynamic_cast<ModelProviderMutable *>(provider))
-            connect(mut->asQObject(),  "apiKeyChanged",  this, "onProviderChanged");
+            connect(mut->asQObject(),  SIGNAL(apiKeyChanged (const QString &)), this, SLOT(onProviderChanged()));
         if (auto *cust = dynamic_cast<ModelProviderCustom *>(provider)) {
-            connect(cust->asQObject(), "nameChanged",    this, "onProviderChanged");
-            connect(cust->asQObject(), "baseUrlChanged", this, "onProviderChanged");
+            connect(cust->asQObject(), SIGNAL(nameChanged   (const QString &)), this, SLOT(onProviderChanged()));
+            connect(cust->asQObject(), SIGNAL(baseUrlChanged(const QUrl    &)), this, SLOT(onProviderChanged()));
         }
     };
     for (auto &p : s_builtinProviders) { // (not all builtin providers are stored)
@@ -273,8 +280,8 @@ void ProviderList::onAboutToBeCleared()
 
 bool ProviderListSort::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
-    auto *leftData  = sourceModel()->data(left ).value<ModelProvider *>();
-    auto *rightData = sourceModel()->data(right).value<ModelProvider *>();
+    auto *leftData  = dynamic_cast<ModelProvider *>(sourceModel()->data(left ).value<QObject *>());
+    auto *rightData = dynamic_cast<ModelProvider *>(sourceModel()->data(right).value<QObject *>());
     if (leftData && rightData) {
         if (leftData->isBuiltin() != rightData->isBuiltin())
             return leftData->isBuiltin() > rightData->isBuiltin(); // builtins first

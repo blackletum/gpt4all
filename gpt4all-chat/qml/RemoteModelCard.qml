@@ -4,16 +4,11 @@ import QtQuick.Layouts
 
 Rectangle {
     id: remoteModelCard
-    property var provider: null
+    property var provider // required
     property alias providerName: providerNameLabel.text
     property alias providerImage: myimage.source
     property alias providerDesc: providerDescLabel.text
     property bool providerUsesApiKey: true
-
-    // for internal use
-    property bool apiKeyRequired: provider === null ? providerUsesApiKey : "apiKey" in provider
-    property bool apiKeyGood: !apiKeyRequired // (overwritten later if required)
-    property bool baseUrlGood: provider !== null // (overwritten later if custom)
 
     color: theme.conversationBackground
     radius: 10
@@ -78,7 +73,38 @@ Rectangle {
         spacing: 30
 
         ColumnLayout {
-            visible: apiKeyRequired
+            visible: !provider.isBuiltin
+
+            MySettingsLabel {
+                text: qsTr("Name")
+                font.bold: true
+                font.pixelSize: theme.fontSizeLarge
+                color: theme.settingsTitleTextColor
+            }
+
+            MyTextField {
+                id: nameField
+                property bool initialized: false
+                property bool ok: true
+                Layout.fillWidth: true
+                font.pixelSize: theme.fontSizeLarge
+                wrapMode: Text.WrapAnywhere
+                Component.onCompleted: {
+                    text = provider.name;
+                    initialized = true;
+                }
+                onTextChanged: {
+                    if (!initialized) return;
+                    ok = provider.setNameQml(text.trim());
+                }
+                placeholderText: qsTr("Provider Name")
+                Accessible.role: Accessible.EditableText
+                Accessible.name: placeholderText
+            }
+        }
+
+        ColumnLayout {
+            visible: "apiKey" in provider
 
             MySettingsLabel {
                 text: qsTr("API Key")
@@ -89,27 +115,32 @@ Rectangle {
 
             MyTextField {
                 id: apiKeyField
+                property bool initialized: false
+                property bool ok: false
                 Layout.fillWidth: true
                 font.pixelSize: theme.fontSizeLarge
                 wrapMode: Text.WrapAnywhere
                 echoMode: TextField.Password
-                function showError() {
-                    messageToast.show(qsTr("ERROR: $API_KEY is empty."));
-                    apiKeyField.placeholderTextColor = theme.textErrorColor;
+                Component.onCompleted: {
+                    if (parent.visible) {
+                        text = provider.apiKey;
+                        ok = text.trim() != "";
+                    } else
+                        ok = true;
+                    initialized = true;
                 }
-                Component.onCompleted: { if (parent.visible && provider !== null) { text = provider.apiKey; } }
                 onTextChanged: {
-                    apiKeyField.placeholderTextColor = theme.mutedTextColor;
-                    if (provider !== null) { apiKeyGood = provider.setApiKeyQml(text) && text !== ""; }
+                    if (!initialized) return;
+                    ok = provider.setApiKeyQml(text.trim()) && text.trim() !== "";
                 }
-                placeholderText: qsTr("enter $API_KEY")
+                placeholderText: qsTr("Provider API Key")
                 Accessible.role: Accessible.EditableText
                 Accessible.name: placeholderText
             }
         }
 
         ColumnLayout {
-            visible: provider === null
+            visible: !provider.isBuiltin
             MySettingsLabel {
                 text: qsTr("Base Url")
                 font.bold: true
@@ -118,18 +149,20 @@ Rectangle {
             }
             MyTextField {
                 id: baseUrlField
+                property bool initialized: false
+                property bool ok: true
                 Layout.fillWidth: true
                 font.pixelSize: theme.fontSizeLarge
                 wrapMode: Text.WrapAnywhere
-                function showError() {
-                    messageToast.show(qsTr("ERROR: $BASE_URL is empty."));
-                    baseUrlField.placeholderTextColor = theme.textErrorColor;
+                Component.onCompleted: {
+                    text = provider.baseUrl;
+                    initialized = true;
                 }
                 onTextChanged: {
-                    baseUrlField.placeholderTextColor = theme.mutedTextColor;
-                    baseUrlGood = text.trim() !== "";
+                    if (!initialized) return;
+                    ok = provider.setBaseUrlQml(text.trim()) && text.trim() !== "";
                 }
-                placeholderText: qsTr("enter $BASE_URL")
+                placeholderText: qsTr("Provider Base URL")
                 Accessible.role: Accessible.EditableText
                 Accessible.name: placeholderText
             }
@@ -152,25 +185,15 @@ Rectangle {
                     Layout.fillWidth: true
                     id: myModelList
                     currentIndex: -1
-                    property bool ready: baseUrlGood && apiKeyGood
+                    property bool ready: nameField.ok && baseUrlField.ok && apiKeyField.ok
                     onReadyChanged: {
-                        if (!ready) { return; }
-                        let providerRef = null; // owns the new provider
-                        let provider = remoteModelCard.provider;
-                        if (provider === null) {
-                            // TODO: custom OpenAI
-                            providerRef = QmlFunctions.newCustomOllamaProvider("foo", baseUrlField.text.trim());
-                            if (providerRef !== null)
-                                provider = providerRef.get();
-                        }
-                        if (provider !== null) {
-                            provider.listModelsQml().then(modelList => {
-                                if (modelList !== null) {
-                                    model = modelList;
-                                    currentIndex = -1;
-                                }
-                            });
-                        }
+                        if (!ready) return;
+                        provider.listModelsQml().then(modelList => {
+                            if (modelList !== null) {
+                                model = modelList;
+                                currentIndex = -1;
+                            }
+                        });
                     }
                 }
             }
@@ -183,7 +206,6 @@ Rectangle {
             font.pixelSize: theme.fontSizeLarge
 
             property string apiKeyText: apiKeyField.text.trim()
-            property string baseUrlText: provider === null ? baseUrlField.text.trim() : provider.baseUrl
             property string modelNameText: myModelList.currentText.trim()
 
             enabled: baseUrlGood && apiKeyGood && modelNameText !== ""
