@@ -244,6 +244,7 @@ qt_add_executable(chat
     src/localdocsmodel.cpp        src/localdocsmodel.h
     src/logger.cpp                src/logger.h
     src/modellist.cpp             src/modellist.h
+    src/mwhttpserver.cpp          src/mwhttpserver.h
     src/mysettings.cpp            src/mysettings.h
     src/network.cpp               src/network.h
     src/server.cpp                src/server.h

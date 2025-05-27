@@ -3,12 +3,14 @@
 #include "chat.h"
 #include "chatmodel.h"
 #include "modellist.h"
+#include "mwhttpserver.h"
 #include "mysettings.h"
 #include "utils.h" // IWYU pragma: keep
 
 #include <fmt/format.h>
 #include <gpt4all-backend/llmodel.h>
 
+#include <QAbstractSocket>
 #include <QByteArray>
 #include <QCborArray>
 #include <QCborMap>
@@ -51,6 +53,7 @@
 
 using namespace std::string_literals;
 using namespace Qt::Literals::StringLiterals;
+using namespace gpt4all::ui;
 
 //#define DEBUG
 
@@ -443,6 +446,8 @@ Server::Server(Chat *chat)
     connect(chat, &Chat::collectionListChanged, this, &Server::handleCollectionListChanged, Qt::QueuedConnection);
 }
 
+Server::~Server() = default;
+
 static QJsonObject requestFromJson(const QByteArray &request)
 {
     QJsonParseError err;
@@ -455,17 +460,57 @@ static QJsonObject requestFromJson(const QByteArray &request)
     return document.object();
 }
 
+/// @brief Check if a host is safe to use to connect to the server.
+///
+/// GPT4All's local server is not safe to expose to the internet, as it does not provide
+/// any form of authentication. DNS rebind attacks bypass CORS and without additional host
+/// header validation, malicious websites can access the server in client-side js.
+///
+/// @param host The value of the "Host" header or ":authority" pseudo-header
+/// @return true if the host is unsafe, false otherwise
+static bool isHostUnsafe(const QString &host)
+{
+    QHostAddress addr;
+    if (addr.setAddress(host) && addr.protocol() == QAbstractSocket::IPv4Protocol)
+        return false; // ipv4
+
+    // ipv6 host is wrapped in square brackets
+    static const QRegularExpression ipv6Re(uR"(^\[(.+)\]$)"_s);
+    if (auto match = ipv6Re.match(host); match.hasMatch()) {
+        auto ipv6 = match.captured(1);
+        if (addr.setAddress(ipv6) && addr.protocol() == QAbstractSocket::IPv6Protocol)
+            return false; // ipv6
+    }
+
+    if (!host.contains('.'))
+        return false; // dotless hostname
+
+    static const QStringList allowedTlds { u".local"_s, u".test"_s, u".internal"_s };
+    for (auto &tld : allowedTlds)
+        if (host.endsWith(tld, Qt::CaseInsensitive))
+            return false; // local TLD
+
+    return true; // unsafe
+}
+
 void Server::start()
 {
-    m_server = std::make_unique<QHttpServer>(this);
-    auto *tcpServer = new QTcpServer(m_server.get());
+    m_server = std::make_unique<MwHttpServer>();
+
+    m_server->addBeforeRequestHandler([](const QHttpServerRequest &req) -> std::optional<QHttpServerResponse> {
+        // this works for HTTP/1.1 "Host" header and HTTP/2 ":authority" pseudo-header
+        auto host = req.url().host();
+        if (!host.isEmpty() && isHostUnsafe(host))
+            return QHttpServerResponse(QHttpServerResponder::StatusCode::Forbidden);
+        return std::nullopt;
+    });
 
     auto port = MySettings::globalInstance()->networkPort();
-    if (!tcpServer->listen(QHostAddress::LocalHost, port)) {
+    if (!m_server->tcpServer()->listen(QHostAddress::LocalHost, port)) {
         qWarning() << "Server ERROR: Failed to listen on port" << port;
         return;
     }
-    if (!m_server->bind(tcpServer)) {
+    if (!m_server->bind()) {
         qWarning() << "Server ERROR: Failed to HTTP server to socket" << port;
         return;
     }
@@ -490,7 +535,7 @@ void Server::start()
         }
     );
 
-    m_server->route("/v1/models/<arg>", QHttpServerRequest::Method::Get,
+    m_server->route<const QString &>("/v1/models/<arg>", QHttpServerRequest::Method::Get,
         [](const QString &model, const QHttpServerRequest &) {
             if (!MySettings::globalInstance()->serverChat())
                 return QHttpServerResponse(QHttpServerResponder::StatusCode::Unauthorized);
@@ -562,7 +607,7 @@ void Server::start()
 
     // Respond with code 405 to wrong HTTP methods:
     m_server->route("/v1/models",  QHttpServerRequest::Method::Post,
-        [] {
+        [](const QHttpServerRequest &) {
             if (!MySettings::globalInstance()->serverChat())
                 return QHttpServerResponse(QHttpServerResponder::StatusCode::Unauthorized);
             return QHttpServerResponse(
@@ -573,8 +618,8 @@ void Server::start()
         }
     );
 
-    m_server->route("/v1/models/<arg>", QHttpServerRequest::Method::Post,
-        [](const QString &model) {
+    m_server->route<const QString &>("/v1/models/<arg>", QHttpServerRequest::Method::Post,
+        [](const QString &model, const QHttpServerRequest &) {
             (void)model;
             if (!MySettings::globalInstance()->serverChat())
                 return QHttpServerResponse(QHttpServerResponder::StatusCode::Unauthorized);
@@ -587,7 +632,7 @@ void Server::start()
     );
 
     m_server->route("/v1/completions", QHttpServerRequest::Method::Get,
-        [] {
+        [](const QHttpServerRequest &) {
             if (!MySettings::globalInstance()->serverChat())
                 return QHttpServerResponse(QHttpServerResponder::StatusCode::Unauthorized);
             return QHttpServerResponse(
@@ -598,7 +643,7 @@ void Server::start()
     );
 
     m_server->route("/v1/chat/completions", QHttpServerRequest::Method::Get,
-        [] {
+        [](const QHttpServerRequest &) {
             if (!MySettings::globalInstance()->serverChat())
                 return QHttpServerResponse(QHttpServerResponder::StatusCode::Unauthorized);
             return QHttpServerResponse(

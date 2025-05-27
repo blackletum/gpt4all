@@ -4,7 +4,6 @@
 #include "chatllm.h"
 #include "database.h"
 
-#include <QHttpServer>
 #include <QHttpServerResponse>
 #include <QJsonObject>
 #include <QList>
@@ -18,6 +17,7 @@
 class Chat;
 class ChatRequest;
 class CompletionRequest;
+namespace gpt4all::ui { class MwHttpServer; }
 
 
 class Server : public ChatLLM
@@ -26,7 +26,7 @@ class Server : public ChatLLM
 
 public:
     explicit Server(Chat *chat);
-    ~Server() override = default;
+    ~Server() override;
 
 public Q_SLOTS:
     void start();
@@ -44,7 +44,7 @@ private Q_SLOTS:
 
 private:
     Chat *m_chat;
-    std::unique_ptr<QHttpServer> m_server;
+    std::unique_ptr<gpt4all::ui::MwHttpServer> m_server;
     QList<ResultInfo> m_databaseResults;
     QList<QString> m_collections;
 };
