@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- Make the the local server resistant to DNS rebind attacks ([#3587](https://github.com/nomic-ai/gpt4all/pull/3587))
+
 ## [3.10.0] - 2025-02-24
 
 ### Added
@@ -312,6 +317,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fix several Vulkan resource management issues ([#2694](https://github.com/nomic-ai/gpt4all/pull/2694))
 - Fix crash/hang when some models stop generating, by showing special tokens ([#2701](https://github.com/nomic-ai/gpt4all/pull/2701))
 
+[Unreleased]: https://github.com/nomic-ai/gpt4all/compare/v3.10.0...HEAD
 [3.10.0]: https://github.com/nomic-ai/gpt4all/compare/v3.9.0...v3.10.0
 [3.9.0]: https://github.com/nomic-ai/gpt4all/compare/v3.8.0...v3.9.0
 [3.8.0]: https://github.com/nomic-ai/gpt4all/compare/v3.7.0...v3.8.0
