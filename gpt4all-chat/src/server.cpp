@@ -501,7 +501,10 @@ void Server::start()
         // this works for HTTP/1.1 "Host" header and HTTP/2 ":authority" pseudo-header
         auto host = req.url().host();
         if (!host.isEmpty() && isHostUnsafe(host))
-            return QHttpServerResponse(QHttpServerResponder::StatusCode::Forbidden);
+            return QHttpServerResponse(
+                QJsonObject { { u"error"_s, u"Access to the server via non-local host %1 is forbidden."_s.arg(host) } },
+                QHttpServerResponder::StatusCode::Forbidden
+            );
         return std::nullopt;
     });
 
